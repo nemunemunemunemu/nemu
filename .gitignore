@@ -1,0 +1,9 @@
+bin
+compile-commands.json
+.cache
+*.core
+*.bin
+*.nes
+~*
+*~
+\#*
