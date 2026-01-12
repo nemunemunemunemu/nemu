@@ -1,6 +1,7 @@
 all: nemu
 nemu:
-	clang -g -O0 src/inprint/inprint2.c \
+	mkdir -p bin
+	clang -O3 src/inprint/inprint2.c \
 	             src/bitmath.c \
 		     src/graphics.c \
 		     src/chips/6502.c \

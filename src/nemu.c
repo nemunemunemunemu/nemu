@@ -58,29 +58,55 @@ int main(int argc, char* argv[])
 	palette[1].r = 0x00; palette[1].g = 0x00; palette[1].b = 0xAA;
 	palette[2].r = 0xFF; palette[2].g = 0xBE; palette[2].b = 0xB2;
 	palette[3].r = 0xDB; palette[3].g = 0x28; palette[3].b = 0x00;
-
+	bool debug = true;
+	bool pause = false;
 	SDL_Event e;
 	//SDL_RenderSetScale(graphics->renderer, 4, 4);
+	SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
+	SDL_RenderClear(graphics->renderer);
 	while (famicom->cpu->running) {
 		while( SDL_PollEvent( &e ) != 0 ) {
 			switch(e.type) {
 			case SDL_QUIT:
 				famicom->cpu->running = false;
 				break;
+			case SDL_KEYDOWN:
+				switch(e.key.keysym.scancode) {
+				case SDL_SCANCODE_D:
+					debug = !debug;
+					break;
+				case SDL_SCANCODE_P:
+					pause = !pause;
+					break;
+				case SDL_SCANCODE_Q:
+					famicom->cpu->running = false;
+					break;
+				case SDL_SCANCODE_S:
+					famicom_step(famicom);
+					break;
+				case SDL_SCANCODE_R:
+					famicom_reset(famicom);
+					break;
+				default:
+					break;
+				}
+				break;
 			}
 		}
-		famicom_step(famicom);
-		SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
-		SDL_RenderClear(graphics->renderer);
-		draw_debug(graphics, famicom, 256, 0);
-		draw_pattern_table(graphics, famicom, 0, 256, 100, palette);
-		draw_pattern_table(graphics, famicom, 1, 385, 100, palette);
-		//		draw_tile(graphics, famicom, 0x1E, 16, 0);
-		//		SDL_Rect fillRect = { 240 / 4, 256 / 4, 240 / 2, 256 / 2 };
-		//		SDL_SetRenderDrawColor(graphics->renderer, 0xFF, 0x00, 0x00, 0xFF );
-		//		SDL_RenderFillRect( graphics->renderer, &fillRect );
-		SDL_RenderPresent(graphics->renderer);
-		SDL_Delay(150);
+		if (!pause) {
+			famicom_step(famicom);
+		}
+		if (famicom->cycles % 2500 == 0 || debug) {
+			SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
+			SDL_RenderClear(graphics->renderer);
+			draw_nametable(graphics, famicom, 0, 0, palette);
+			if (strcmp(famicom->cpu->current_instruction_name, "") != 0 && debug) {
+				draw_debug(graphics, famicom, 256, 0);
+				draw_pattern_table(graphics, famicom, 0, 256, 100, palette);
+				draw_pattern_table(graphics, famicom, 1, 385, 100, palette);
+			}
+			SDL_RenderPresent(graphics->renderer);
+		}
 	}
 	printf("stopping\n");
 	nemu_exit();

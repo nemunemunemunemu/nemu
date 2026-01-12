@@ -53,6 +53,7 @@ void cpu_reset(Cpu_6502* cpu, System system)
 	cpu->reg[reg_sp] = 0xFD;
 	cpu->pc = bytes_to_word(mem_read(system, 0xFFFD), mem_read(system, 0xFFFC));
 	cpu->running = true;
+	cpu->current_instruction_name = "";
 }
 
 void push_stack(System system, Cpu_6502* cpu, byte value)
@@ -162,7 +163,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 
 void update_p_nz ( Cpu_6502* cpu, byte value, bool check_overflow )
 {
-	if (get_bit(value, 7) == 1) {
+	if (get_bit(value, 0) == 1) {
 		set_p(cpu, negative, true);
 	} else {
 		set_p(cpu, negative, false);
@@ -173,7 +174,7 @@ void update_p_nz ( Cpu_6502* cpu, byte value, bool check_overflow )
 		set_p(cpu, zero, false);
 	}
 	if (check_overflow) {
-		if (get_bit(value, 6) == 1) {
+		if (get_bit(value, 1) == 1) {
 			set_p(cpu, overflow, true);
 		} else {
 			set_p(cpu, overflow, false);
@@ -194,7 +195,7 @@ void poke(System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2], by
 
 void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_ r, enum addressing_mode a, enum flag f, byte oper[2], char* name)
 {
-	cpu->current_instruction = name;
+	cpu->current_instruction_name = name;
 	byte value;
 	word addr;
 	word opera = bytes_to_word(oper[1], oper[0]);
@@ -394,7 +395,6 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 void nmi(System system, Cpu_6502* cpu)
 {
-	printf("NMI\n");
 	push_stack(system, cpu, get_higher_byte(cpu->pc));
 	push_stack(system, cpu, get_lower_byte(cpu->pc));
 	set_p(cpu, break_, 0);

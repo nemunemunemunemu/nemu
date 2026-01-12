@@ -1,10 +1,3 @@
-typedef struct cpu_6502 {
-	word pc;
-	byte reg[5];
-	bool running;
-	bool branch_taken;
-	char* current_instruction;
-} Cpu_6502;
 
 enum register_ {
 	reg_a,
@@ -93,6 +86,16 @@ typedef struct parsed_instruction {
 	enum addressing_mode a;
 	enum instruction_name n;
 } Instruction;
+
+typedef struct cpu_6502 {
+	word pc;
+	byte reg[5];
+	bool running;
+	bool branch_taken;
+	char* current_instruction_name;
+	Instruction current_instruction;
+	byte oper[2];
+} Cpu_6502;
 
 void print_cpu_state (Cpu_6502* cpu);
 void print_addressing_mode(enum addressing_mode a);
