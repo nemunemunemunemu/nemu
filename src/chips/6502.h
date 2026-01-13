@@ -22,6 +22,7 @@ enum operation {
 	xor_a,
 	shift_left,
 	shift_right,
+	logical_shift_right,
 	branch,
 	branch_jsr,
 	branch_rts,

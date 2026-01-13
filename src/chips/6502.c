@@ -236,9 +236,21 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		poke(system, cpu, a, oper, value);
                 break;
 
+	case logical_shift_right:
+		value = peek(system, cpu, a, oper);
+		if (get_bit(value, 7) == 1)
+			set_p(cpu, carry, true);
+		value >>= 1;
+		poke(system, cpu, a, oper, value);
+		break;
+
+		/*case arithmetic_shift_left:
+		value = peek(system, cpu, a, oper);
+		*/
+
 	case compare_reg_mem:
 		value = peek(system, cpu, a, oper);
-		if (get_bit(value - cpu->reg[r], 7) == 1) {
+		if (get_bit(value - cpu->reg[r], 0) == 1) {
 			set_p(cpu, negative, true);
 		}
 		if (cpu->reg[r] == value) {
@@ -251,7 +263,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 	case compare_mem_accumulator:
 		value = peek(system, cpu, a, oper);
-		if (get_bit(value, 7) == 1) {
+		if (get_bit(value, 0) == 1) {
 			set_p(cpu, negative, true);
 		}
 		if ((cpu->reg[reg_a] & value) == 0) {
@@ -593,7 +605,7 @@ void asl ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 
 void lsr ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 {
-	instruction(system, cpu, shift_right, 0, a, 0, oper, "lsr");
+	instruction(system, cpu, logical_shift_right, 0, a, 0, oper, "lsr");
 }
 
 void rol ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )

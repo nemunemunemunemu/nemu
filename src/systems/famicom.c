@@ -1,4 +1,3 @@
-#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,7 +9,6 @@
 #include "../chips/2C02.h"
 #include "../chips/6502.h"
 #include "famicom.h"
-
 
 const bool debug = true;
 
@@ -50,6 +48,7 @@ void famicom_reset (Famicom* famicom)
 	memset( famicom->mem, 0, sizeof(byte) * memsize );
 	memset( famicom->ppu->nametable, 0, sizeof(byte) * sizeof(famicom->ppu->nametable) );
 	memset( famicom->ppu->attribute_table, 0, sizeof(byte) * sizeof(famicom->ppu->attribute_table) );
+	memset( famicom->ppu->oam, 0, sizeof(byte) * sizeof(famicom->ppu->oam) );
 	famicom->ppu->vblank_flag = true;
 	famicom->ppu->nmi_enable = false;
 	famicom->ppu->write_latch = false;
@@ -60,7 +59,6 @@ void famicom_reset (Famicom* famicom)
 	famicom->ppu->address = 0;
 	famicom->ppu->nametable_base = 0;
 	cpu_reset(famicom->cpu, system);
-	//	famicom->cpu->pc = 0xF1B4;
 }
 
 void famicom_destroy (Famicom* famicom)
@@ -172,30 +170,22 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		case PPUMASK:
 			return 0;
 		case PPUSTATUS:
-			if (write) {
-				// PPUSTATUS should not be written to
-				return 0;
-			} else {
-				byte ppustatus = 0;
-				if (f->ppu->vblank_flag) {
-					ppustatus = set_bit(ppustatus, 0, true);
-				}
-				return ppustatus;
+			byte ppustatus = 0;
+			if (f->ppu->vblank_flag) {
+				ppustatus = set_bit(ppustatus, 0, true);
 			}
-			f->ppu->vblank_flag = false;
 			f->ppu->write_latch = false;
-			return 0;
+			return ppustatus;
 		case OAMADDR:
+			if (write) {
+				f->ppu->oam_address = value;
+			}
 			return 0;
 		case OAMDATA:
 			return 0;
 		case PPUSCROLL:
-			f->ppu->write_latch = !f->ppu->write_latch;
-			if (write) {
-				return 0;
-			} else {
-				return 0;
-			}
+			//f->ppu->write_latch = !f->ppu->write_latch;
+			return 0;
 		case PPUADDR:
 			if (write) {
 				if (f->ppu->write_latch) {
@@ -226,7 +216,25 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 			}
 			return 0;
 		}
+	// APU & OAMDMA
 	} else if (addr < unmapped_addr_start) {
+		switch (addr) {
+		case 0x4014: // OAMDMA
+			if (write) {
+				int i = bytes_to_word(value, 00);
+				for (int oam_i=0; oam_i<64; oam_i++) {
+					for (int ii=0; ii<4; ii++) {
+						f->ppu->oam[oam_i][ii] = f->mem[i+ii];
+
+					}
+					//printf("%X - %X %X %X %X\n",i, f->mem[i], f->mem[i+1], f->mem[i+2], f->mem[i+3]);
+					i += 4;
+				}
+			}
+			return 0;
+		default:
+			return 0;
+		}
 		return 0;
 	// cartridge
 	} else if (unmapped_addr_start < addr) {
@@ -235,7 +243,11 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 				printf("tried to write to cartridge space %0X - something went wrong\n", addr);
 				return 0;
 			} else {
-				return f->prg[(addr - 0xC000)];
+				if (f->prg_size == 32768) {
+					return f->prg[addr - (f->prg_size)];
+				} else {
+					return f->prg[addr - (f->prg_size*3)];
+				}
 			}
 		}
 	} else {
@@ -264,6 +276,7 @@ void famicom_step(Famicom* famicom)
 	if (i.n == unimplemented) {
 		printf("unimplemented opcode %X!\n", mmap_famicom_read(famicom, famicom->cpu->pc));
 		famicom->cpu->running = false;
+		return;
 	}
 	byte oper1 = mmap_famicom_read(famicom, famicom->cpu->pc + 1);
 	byte oper2 = 0;

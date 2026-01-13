@@ -61,7 +61,6 @@ int main(int argc, char* argv[])
 	bool debug = true;
 	bool pause = false;
 	SDL_Event e;
-	//SDL_RenderSetScale(graphics->renderer, 4, 4);
 	SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
 	SDL_RenderClear(graphics->renderer);
 	while (famicom->cpu->running) {
@@ -96,14 +95,19 @@ int main(int argc, char* argv[])
 		if (!pause) {
 			famicom_step(famicom);
 		}
-		if (famicom->cycles % 2500 == 0 || debug) {
+		if (famicom->cycles % 250 == 0 || debug) {
 			SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
 			SDL_RenderClear(graphics->renderer);
-			draw_nametable(graphics, famicom, 0, 0, palette);
+			if (famicom->chr_size != 0) {
+				draw_nametable(graphics, famicom, 0, 0, palette);
+				draw_oam(graphics, famicom, palette);
+			}
 			if (strcmp(famicom->cpu->current_instruction_name, "") != 0 && debug) {
 				draw_debug(graphics, famicom, 256, 0);
-				draw_pattern_table(graphics, famicom, 0, 256, 100, palette);
-				draw_pattern_table(graphics, famicom, 1, 385, 100, palette);
+				if (famicom->chr_size != 0) {
+					draw_pattern_table(graphics, famicom, 0, 256, 100, palette);
+					draw_pattern_table(graphics, famicom, 1, 385, 100, palette);
+				}
 			}
 			SDL_RenderPresent(graphics->renderer);
 		}

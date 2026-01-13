@@ -71,7 +71,7 @@ void draw_debug(SDL_Instance* g, Famicom* f, int x, int y)
 		snprintf(addr_mode, sizeof(addr_mode), "%d (%X)", (int8_t)oper1, oper1);
 		break;
 	case absolute: case absolute_indirect: case absolute_x: case absolute_y:
-		snprintf(addr_mode, sizeof(addr_mode), "0x%X (%X,%X)", opera, oper1, oper2);
+		snprintf(addr_mode, sizeof(addr_mode), "0x%X", opera);
 		break;
 	}
 	snprintf(istatus, sizeof(istatus), "%s %s", f->cpu->current_instruction_name, addr_mode);
@@ -95,6 +95,7 @@ void draw_debug(SDL_Instance* g, Famicom* f, int x, int y)
 	}
 	incolor(0xffffff, 0);
 	inprint(g->renderer, istatus, x,  y+27);
+	printf("%s %s\n", cpustatus, istatus);
 	if (f->debug.nmi) {
 		incolor(GREEN, 0);
 	} else {
@@ -107,11 +108,9 @@ void draw_debug(SDL_Instance* g, Famicom* f, int x, int y)
 	char ppuctrl[50];
 	snprintf(ppuctrl, sizeof(ppuctrl), "%X00%X%X%X%X",
 	    f->ppu->nmi_enable, f->ppu->bg_pattern_table, f->ppu->sprite_pattern_table, f->ppu->vram_increment, f->ppu->nametable_base);
-	char ppuaddr[50];
-	snprintf(ppuaddr, sizeof(ppuaddr), "%0X", f->ppu->address);
-	snprintf(ppustatus, sizeof(ppustatus), "%s  %s", ppuctrl, ppuaddr);
+	snprintf(ppustatus, sizeof(ppustatus), "%s  %0X        %0X", ppuctrl, f->ppu->address, f->ppu->oam_address);
 	inprint(g->renderer, ppustatus, x, y+45);
-	inprint(g->renderer, "PPUCTRL  PPUADDR", x, y+54);
+	inprint(g->renderer, "PPUCTRL  PPUADDR  OAMADDR", x, y+54);
 }
 
 void draw_tile(SDL_Instance* g, Famicom* f, int tile, int x_offset, int y_offset, bool mirrored, int table, SDL_Color palette[])
@@ -161,17 +160,12 @@ void draw_pattern_table(SDL_Instance* g, Famicom* f, int table, int x_offset, in
 
 void draw_nametable(SDL_Instance* g, Famicom* f, int x, int y, SDL_Color palette[])
 {
-	SDL_Color mypalette[4];
-	mypalette[0].r = 0x00; mypalette[0].g = 0x00; mypalette[0].b = 0x00;
-	mypalette[1].r = 0x00; mypalette[1].g = 0x00; mypalette[1].b = 0xAA;
-	mypalette[2].r = 0xFF; mypalette[2].g = 0xBE; mypalette[2].b = 0xB2;
-	mypalette[3].r = 0xDB; mypalette[3].g = 0x28; mypalette[3].b = 0x00;
-
 	for (int y=0;y<30;y++) {
 		for (int x=0;x<32;x++) {
-			draw_tile(g, f, f->ppu->nametable[0][32*y+x]*16, (x*8), (y*8), false, f->ppu->bg_pattern_table, mypalette);
+			draw_tile(g, f, f->ppu->nametable[0][32*y+x]*16, (x*8), (y*8), false, f->ppu->bg_pattern_table, palette);
 		}
 	}
+	/*
 	incolor(0xFFFFFF, 0);
 	for (int y=0;y<8;y++) {
 		for (int x=0;x<8;x++) {
@@ -180,5 +174,15 @@ void draw_nametable(SDL_Instance* g, Famicom* f, int x, int y, SDL_Color palette
 			inprint(g->renderer, attr, (x*32)+8, y*32);
 		}
 	}
+	*/
+}
 
+void draw_oam(SDL_Instance* g, Famicom* f, SDL_Color palette[])
+{
+	for (int i=0; i<64; i++) {
+		byte sprite_y = f->ppu->oam[i][0];
+		byte tile = f->ppu->oam[i][1] * 16;
+		byte sprite_x = f->ppu->oam[i][3];
+		draw_tile(g, f, tile, sprite_x, sprite_y, false, f->ppu->sprite_pattern_table, palette);
+	}
 }

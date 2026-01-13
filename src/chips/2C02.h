@@ -10,4 +10,6 @@ typedef struct ppu {
 	bool sprite_pattern_table;
 	byte nametable[4][1024];
 	byte attribute_table[4][64];
+	byte oam[64][4];
+	byte oam_address;
 } Famicom_ppu;

@@ -15,6 +15,7 @@ typedef struct famicom {
 	byte* mem;
 	byte* prg;
 	byte* chr;
+	byte oam[64][4];
 } Famicom;
 
 Famicom* famicom_create ();
@@ -25,4 +26,3 @@ int  famicom_load_rom (Famicom* famicom, FILE* rom);
 byte mmap_famicom(Famicom* f, word addr, byte value, bool write);
 byte mmap_famicom_read ( Famicom* famicom, word addr );
 void mmap_famicom_write ( Famicom* famicom, word addr, byte value );
-

@@ -1,5 +1,6 @@
 bin
-compile-commands.json
+.clang-format
+compile_commands.json
 .cache
 *.core
 *.bin
