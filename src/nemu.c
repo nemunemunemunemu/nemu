@@ -13,7 +13,7 @@
 
 #include "graphics.h"
 
-#define VERSION "0.0.1"
+#define VERSION "0.0.0"
 
 Famicom* famicom;
 SDL_Instance* graphics;
@@ -31,11 +31,6 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 
-	graphics = init_graphics();
-	if (graphics == NULL) {
-		return 1;
-	}
-
 	FILE* f;
 	f = fopen(argv[1], "rb");
 	if (f == NULL) {
@@ -51,6 +46,13 @@ int main(int argc, char* argv[])
 		free(famicom);
 		return 1;
 	}
+
+	graphics = init_graphics();
+	if (graphics == NULL) {
+		famicom_destroy(famicom);
+		return 1;
+	}
+
 	famicom->debug.rom_name = argv[1];
 	famicom_reset(famicom);
 	SDL_Color palette[4];
@@ -58,11 +60,12 @@ int main(int argc, char* argv[])
 	palette[1].r = 0x00; palette[1].g = 0x00; palette[1].b = 0xAA;
 	palette[2].r = 0xFF; palette[2].g = 0xBE; palette[2].b = 0xB2;
 	palette[3].r = 0xDB; palette[3].g = 0x28; palette[3].b = 0x00;
-	bool debug = true;
+	bool debug = false;
 	bool pause = false;
 	SDL_Event e;
 	SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
 	SDL_RenderClear(graphics->renderer);
+	SDL_RenderPresent(graphics->renderer);
 	while (famicom->cpu->running) {
 		while( SDL_PollEvent( &e ) != 0 ) {
 			switch(e.type) {
@@ -95,7 +98,7 @@ int main(int argc, char* argv[])
 		if (!pause) {
 			famicom_step(famicom);
 		}
-		if (famicom->cycles % 250 == 0 || debug) {
+		if (famicom->cycles % 50 == 0 || debug) {
 			SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
 			SDL_RenderClear(graphics->renderer);
 			if (famicom->chr_size != 0) {

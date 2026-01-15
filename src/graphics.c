@@ -95,7 +95,10 @@ void draw_debug(SDL_Instance* g, Famicom* f, int x, int y)
 	}
 	incolor(0xffffff, 0);
 	inprint(g->renderer, istatus, x,  y+27);
-	printf("%s %s\n", cpustatus, istatus);
+	print_byte_as_bits(f->cpu->reg[reg_p]);
+	printf(" %s\n", cpustatus);
+	print_addressing_mode(i.a);
+	printf(" %s\n", istatus);
 	if (f->debug.nmi) {
 		incolor(GREEN, 0);
 	} else {
@@ -162,7 +165,7 @@ void draw_nametable(SDL_Instance* g, Famicom* f, int x, int y, SDL_Color palette
 {
 	for (int y=0;y<30;y++) {
 		for (int x=0;x<32;x++) {
-			draw_tile(g, f, f->ppu->nametable[0][32*y+x]*16, (x*8), (y*8), false, f->ppu->bg_pattern_table, palette);
+			draw_tile(g, f, f->ppu->nametable[f->ppu->nametable_base][32*y+x]*16, (x*8), (y*8), false, f->ppu->bg_pattern_table, palette);
 		}
 	}
 	/*
@@ -173,8 +176,8 @@ void draw_nametable(SDL_Instance* g, Famicom* f, int x, int y, SDL_Color palette
 			sprintf(attr, "%X", f->ppu->attribute_table[0][8*y+x]);
 			inprint(g->renderer, attr, (x*32)+8, y*32);
 		}
-	}
-	*/
+		}*/
+
 }
 
 void draw_oam(SDL_Instance* g, Famicom* f, SDL_Color palette[])

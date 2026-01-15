@@ -135,6 +135,7 @@ enum ppu_mmapped_register {
 	PPUADDR,
 	PPUDATA,
 };
+const word OAMDMA = 0x4014;
 
 byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 {
@@ -152,14 +153,14 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		switch (ppu_reg) {
 		case PPUCTRL:
 			if (write) {
+				//f->ppu->vram_increment = get_bit(value, 2);
 				f->ppu->nmi_enable = get_bit(value, 7);
 				f->ppu->sprite_pattern_table = get_bit(value, 5);
 				f->ppu->bg_pattern_table = get_bit(value, 4);
-				f->ppu->vram_increment = get_bit(value, 2);
-				f->ppu->nametable_base = value & 0x03;
+				//f->ppu->nametable_base = value & 0x03;
 				return 0;
 			} else {
-				byte ppuctrl = 0;
+				byte ppuctrl;
 				ppuctrl = set_bit(ppuctrl, 0, f->ppu->nmi_enable);
 				ppuctrl = set_bit(ppuctrl, 3, f->ppu->bg_pattern_table);
 				ppuctrl = set_bit(ppuctrl, 4, f->ppu->sprite_pattern_table);
@@ -182,9 +183,11 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 			}
 			return 0;
 		case OAMDATA:
+			if (write) {
+			}
 			return 0;
 		case PPUSCROLL:
-			//f->ppu->write_latch = !f->ppu->write_latch;
+			f->ppu->write_latch = !f->ppu->write_latch;
 			return 0;
 		case PPUADDR:
 			if (write) {
@@ -219,7 +222,7 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 	// APU & OAMDMA
 	} else if (addr < unmapped_addr_start) {
 		switch (addr) {
-		case 0x4014: // OAMDMA
+		case OAMDMA:
 			if (write) {
 				int i = bytes_to_word(value, 00);
 				for (int oam_i=0; oam_i<64; oam_i++) {

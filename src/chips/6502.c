@@ -109,6 +109,23 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		}
 		break;
 	case zeropage_x:
+		addr_f = (oper[0] + cpu->reg[reg_x]) % 0x100;
+		if (write) {
+			mem_write(system, addr_f, value);
+			return 0;
+		} else {
+			return mem_read(system, addr_f);
+		}
+		break;
+	case zeropage_y:
+		addr_f = (oper[0] + cpu->reg[reg_y]) % 0x100;
+		if (write) {
+			mem_write(system, addr_f, value);
+			return 0;
+		} else {
+			return mem_read(system, addr_f);
+		}
+		break;
 	case absolute_x:
 		addr_f = addr_a + cpu->reg[reg_x];
 		if (write) {
@@ -127,17 +144,8 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 			return mem_read(system, addr_f);
 		}
 		break;
-	case zeropage_y:
-		addr_f = oper[0] + cpu->reg[reg_y];
-		if (write) {
-			mem_write(system, addr_f, value);
-			return 0;
-		} else {
-			return mem_read(system, addr_f);
-		}
-		break;
 	case zeropage_xi:
-		addr_x = oper[0] + cpu->reg[reg_x];
+		addr_x = (oper[0] + cpu->reg[reg_x]) % 0x100;
 		addr_f = bytes_to_word(mem_read(system, addr_x+1), mem_read(system, addr_x));
 		if (write) {
 			mem_write(system, addr_f, value);
@@ -161,26 +169,28 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 	}
 }
 
-void update_p_nz ( Cpu_6502* cpu, byte value, bool check_overflow )
+void update_p_nz ( Cpu_6502* cpu, byte value )
 {
-	if (get_bit(value, 0) == 1) {
-		set_p(cpu, negative, true);
-	} else {
-		set_p(cpu, negative, false);
-	}
+	set_p(cpu, negative, get_bit(value, 0) == 1);
 	if (value == 0) {
 		set_p(cpu, zero, true);
 	} else {
 		set_p(cpu, zero, false);
 	}
-	if (check_overflow) {
-		if (get_bit(value, 1) == 1) {
-			set_p(cpu, overflow, true);
-		} else {
-			set_p(cpu, overflow, false);
-		}
-	}
+}
 
+void update_p_c ( Cpu_6502* cpu, byte value_old, byte value)
+{
+	if (value < value_old) {
+		set_p(cpu, carry, true);
+	} else {
+		set_p(cpu, carry, false);
+	}
+	if (get_bit(value, 0) != get_p(cpu, carry)) {
+		set_p(cpu, overflow, true);
+	} else {
+		set_p(cpu, overflow, false);
+	}
 }
 
 byte peek(System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
@@ -197,6 +207,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 {
 	cpu->current_instruction_name = name;
 	byte value;
+	byte value_old;
 	word addr;
 	word opera = bytes_to_word(oper[1], oper[0]);
 	byte low;
@@ -206,131 +217,156 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 	switch (o) {
 	case no_op:
 		break;
-		//memory
+	//memory
 	case write_mem:
 		value = cpu->reg[r];
 		poke(system, cpu, a, oper, value);
+		update_p_nz(cpu, value);
 		break;
 
 	case increment_mem:
 		value = peek(system, cpu, a, oper);
 		poke(system, cpu, a, oper, value + 1);
-		update_p_nz(cpu, value, false);
+		update_p_nz(cpu, value);
 		break;
 
 	case decrement_mem:
 		value = peek(system, cpu, a, oper);
 		poke(system, cpu, a, oper, value - 1);
-		update_p_nz(cpu, value, false);
+		update_p_nz(cpu, value);
 		break;
 
-	case shift_left:
+	case shift_rol:
 		value = peek(system, cpu, a, oper);
+		set_p(cpu, carry, get_bit(value, 7));
 		value = value << 1;
+		value = set_bit(value, 0, get_p(cpu, carry));
 		poke(system, cpu, a, oper, value);
+		update_p_nz(cpu, value);
 		break;
 
-	case shift_right:
+	case shift_ror:
 		value = peek(system, cpu, a, oper);
+		set_p(cpu, carry, get_bit(value, 0));
 		value = value >> 1;
+		value = set_bit(value, 7, get_p(cpu, carry));
 		poke(system, cpu, a, oper, value);
+		update_p_nz(cpu, value);
                 break;
 
 	case logical_shift_right:
 		value = peek(system, cpu, a, oper);
-		if (get_bit(value, 7) == 1)
-			set_p(cpu, carry, true);
+		set_p(cpu, carry, get_bit(value, 7));
 		value >>= 1;
 		poke(system, cpu, a, oper, value);
+		set_p(cpu, zero, cpu->reg[reg_a] == 0);
+		set_p(cpu, negative, get_bit(value, 0));
 		break;
 
-		/*case arithmetic_shift_left:
+	case arithmetic_shift_left:
 		value = peek(system, cpu, a, oper);
-		*/
+		set_p(cpu, carry, get_bit(value, 0));
+		value <<= 1;
+		poke(system, cpu, a, oper, value);
+		update_p_nz(cpu, value);
+		break;
 
 	case compare_reg_mem:
 		value = peek(system, cpu, a, oper);
 		if (get_bit(value - cpu->reg[r], 0) == 1) {
 			set_p(cpu, negative, true);
+		} else {
+			set_p(cpu, negative, false);
 		}
-		if (cpu->reg[r] == value) {
-			set_p(cpu, zero, true);
-		}
-		if (cpu->reg[r] >= value) {
-			set_p(cpu, carry, true);
-		}
+		set_p(cpu, zero, cpu->reg[r] == value);
+		set_p(cpu, carry, cpu->reg[r] >= value);
 		break;
 
 	case compare_mem_accumulator:
 		value = peek(system, cpu, a, oper);
-		if (get_bit(value, 0) == 1) {
-			set_p(cpu, negative, true);
-		}
 		if ((cpu->reg[reg_a] & value) == 0) {
 			set_p(cpu, zero, true);
+		} else {
+			set_p(cpu, zero, false);
 		}
+		set_p(cpu, negative, get_bit(value, 0));
+		set_p(cpu, overflow, get_bit(value, 1));
 		break;
 
 		//register
 	case alter_register:
 		value = peek(system, cpu, a, oper);
 		set_reg( cpu, r,  value);
-		update_p_nz(cpu, value, false);
+		update_p_nz(cpu, value);
 		break;
 
 	case add:
-		value = peek(system, cpu, a, oper) + cpu->reg[r];
+		value_old = peek(system, cpu, a, oper);
+		value = value_old + cpu->reg[reg_a] + get_p(cpu, carry);
 		set_reg(cpu, r, value);
-		update_p_nz(cpu, value, true);
+		update_p_nz(cpu, value);
+		update_p_c(cpu, value_old, value);
 		break;
 
 	case subtract:
-		value = cpu->reg[r] - peek(system, cpu, a, oper);
+		value_old = cpu->reg[reg_a];
+		value = (cpu->reg[reg_a] - peek(system, cpu, a, oper)) - !get_p(cpu, carry);
 		set_reg(cpu, r, value);
-		update_p_nz(cpu, value, true);
+		update_p_nz(cpu, value);
+		update_p_c(cpu, value_old, value);
 		break;
 
 	case increment_reg:
+		value_old = cpu->reg[r];
 		value = cpu->reg[r] + 1;
 		set_reg(cpu, r, value);
-		update_p_nz(cpu, value, true);
+		update_p_nz(cpu, value);
 		break;
 
 	case decrement_reg:
+		value_old = cpu->reg[r];
 		value = cpu->reg[r] - 1;
 		set_reg(cpu, r, value);
-		update_p_nz(cpu, value, true);
+		update_p_nz(cpu, value);
 		break;
 
 	case and_a:
 		value = peek(system, cpu, a, oper);
 		set_reg(cpu, reg_a, value & cpu->reg[reg_a]);
-		update_p_nz(cpu, value, false);
+		update_p_nz(cpu, value);
 		break;
 
 	case or_a:
 		value = peek(system, cpu, a, oper);
 		set_reg(cpu, reg_a, value | cpu->reg[reg_a]);
-		update_p_nz(cpu, value, false);
+		update_p_nz(cpu, value);
 		break;
 
 	case xor_a:
 		value = peek(system, cpu, a, oper);
 		set_reg(cpu, reg_a, value ^ cpu->reg[reg_a]);
-		update_p_nz(cpu, value, false);
+		update_p_nz(cpu, value);
 		break;
 
 	case transfer_reg_a:
-		set_reg(cpu, r, cpu->reg[reg_a]);
+		value = cpu->reg[reg_a];
+		set_reg(cpu, r, value);
+		update_p_nz(cpu, value);
 		break;
 	case transfer_reg_x:
-		set_reg(cpu, r, cpu->reg[reg_x]);
+		value = cpu->reg[reg_x];
+		set_reg(cpu, r, value);
+		update_p_nz(cpu, value);
 		break;
 	case transfer_reg_sp:
-		set_reg(cpu, r, cpu->reg[reg_sp]);
+		value = cpu->reg[reg_sp];
+		set_reg(cpu, r, value);
+		update_p_nz(cpu, value);
 		break;
 	case transfer_reg_y:
-		set_reg(cpu, r, cpu->reg[reg_y]);
+		value = cpu->reg[reg_y];
+		set_reg(cpu, r, value);
+		update_p_nz(cpu, value);
 		break;
 
 		//branch
@@ -359,27 +395,24 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		cpu->branch_taken = true;
 		break;
 
+	// not setting cpu->branch_taken on these is intentional behavior
 	case branch_rti:
 		set_reg(cpu, reg_p, pull_stack(system, cpu));
 		high = pull_stack(system, cpu);
 		low = pull_stack(system, cpu);
 		addr = bytes_to_word(low, high);
 		cpu->pc = addr;
-		cpu->branch_taken = true;
 		break;
 
-		// not setting cpu->branch_taken on these is intentional behavior
 	case branch_conditional_flag:
-		value = (uint8_t)oper[0] + get_lower_byte(cpu->pc);
-		addr = bytes_to_word(get_higher_byte(cpu->pc), value);
+		addr = (int8_t)oper[0] + cpu->pc;
 		if (get_p(cpu, f) == 1) {
 			cpu->pc = addr;
 		}
 		break;
 
 	case branch_conditional_flag_clear:
-		value = (uint8_t)oper[0] + get_lower_byte(cpu->pc);
-		addr = bytes_to_word(get_higher_byte(cpu->pc), value);
+		addr = (int8_t)oper[0] + cpu->pc;
 		if (get_p(cpu, f) == 0) {
 			cpu->pc = addr;
 		}
@@ -389,7 +422,9 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		push_stack(system, cpu, cpu->reg[r]);
 		break;
 	case pull_reg_stack:
-		set_reg(cpu, r, pull_stack(system, cpu));
+		value = pull_stack(system, cpu);
+		set_reg(cpu, r, value);
+		update_p_nz(cpu, value);
 		break;
 	case set_flag:
 		set_p(cpu, f, true);
@@ -600,7 +635,7 @@ void bit ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 
 void asl ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 {
-	instruction(system, cpu, shift_left, 0, a, 0, oper, "asl");
+	instruction(system, cpu, arithmetic_shift_left, 0, a, 0, oper, "asl");
 }
 
 void lsr ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
@@ -610,12 +645,12 @@ void lsr ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 
 void rol ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 {
-	instruction(system, cpu, shift_left, 0, a, 0, oper, "rol");
+	instruction(system, cpu, shift_rol, 0, a, 0, oper, "rol");
 }
 
 void ror ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 {
-	instruction(system, cpu, shift_right, 0, a, 0, oper, "ror");
+	instruction(system, cpu, shift_ror, 0, a, 0, oper, "ror");
 }
 
 
@@ -680,7 +715,7 @@ void bvs ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 	instruction(system, cpu, branch_conditional_flag, 0, a, overflow, oper, "bvs");
 }
 
-// flags 
+// flags
 
 void clc ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 {

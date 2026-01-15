@@ -1,4 +1,3 @@
-
 enum register_ {
 	reg_a,
 	reg_x,
@@ -20,9 +19,10 @@ enum operation {
 	and_a,
 	or_a,
 	xor_a,
-	shift_left,
-	shift_right,
+	shift_rol,
+	shift_ror,
 	logical_shift_right,
+	arithmetic_shift_left,
 	branch,
 	branch_jsr,
 	branch_rts,
