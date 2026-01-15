@@ -95,17 +95,12 @@ void draw_debug(SDL_Instance* g, Famicom* f, int x, int y)
 	}
 	incolor(0xffffff, 0);
 	inprint(g->renderer, istatus, x,  y+27);
-	print_byte_as_bits(f->cpu->reg[reg_p]);
-	printf(" %s\n", cpustatus);
-	print_addressing_mode(i.a);
-	printf(" %s\n", istatus);
 	if (f->debug.nmi) {
 		incolor(GREEN, 0);
 	} else {
 		incolor(GREY, 0);
 	}
 	inprint(g->renderer, "nmi", x,  y+36);
-
 	incolor(WHITE, 0);
 	char ppustatus[50];
 	char ppuctrl[50];
@@ -161,10 +156,17 @@ void draw_pattern_table(SDL_Instance* g, Famicom* f, int table, int x_offset, in
 	}
 }
 
-void draw_nametable(SDL_Instance* g, Famicom* f, int x, int y, SDL_Color palette[])
+void draw_nametable(SDL_Instance* g, Famicom* f, int x, int y)
 {
+	SDL_Color palette[4];
+	palette[0].r = 0x00; palette[0].g = 0x00; palette[0].b = 0x00;
+	palette[1].r = 0x00; palette[1].g = 0x00; palette[1].b = 0xAA;
+	palette[2].r = 0xFF; palette[2].g = 0xBE; palette[2].b = 0xB2;
+	palette[3].r = 0xDB; palette[3].g = 0x28; palette[3].b = 0x00;
+
 	for (int y=0;y<30;y++) {
 		for (int x=0;x<32;x++) {
+			byte attr = f->ppu->attribute_table[0][8*(y/4)+(x/4)];
 			draw_tile(g, f, f->ppu->nametable[f->ppu->nametable_base][32*y+x]*16, (x*8), (y*8), false, f->ppu->bg_pattern_table, palette);
 		}
 	}
@@ -177,14 +179,13 @@ void draw_nametable(SDL_Instance* g, Famicom* f, int x, int y, SDL_Color palette
 			inprint(g->renderer, attr, (x*32)+8, y*32);
 		}
 		}*/
-
 }
 
 void draw_oam(SDL_Instance* g, Famicom* f, SDL_Color palette[])
 {
 	for (int i=0; i<64; i++) {
 		byte sprite_y = f->ppu->oam[i][0];
-		byte tile = f->ppu->oam[i][1] * 16;
+		byte tile = f->ppu->oam[i][1]*16;
 		byte sprite_x = f->ppu->oam[i][3];
 		draw_tile(g, f, tile, sprite_x, sprite_y, false, f->ppu->sprite_pattern_table, palette);
 	}

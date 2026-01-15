@@ -17,13 +17,21 @@
 
 Famicom* famicom;
 SDL_Instance* graphics;
+SDL_Color palette[4];
+FILE* dfh;
 
 void usage(char* name);
 void handle_signal(int sig);
 void nemu_exit();
+void draw_graphics ();
 
 int main(int argc, char* argv[])
 {
+	palette[0].r = 0x00; palette[0].g = 0x00; palette[0].b = 0x00;
+	palette[1].r = 0x00; palette[1].g = 0x00; palette[1].b = 0xAA;
+	palette[2].r = 0xFF; palette[2].g = 0xBE; palette[2].b = 0xB2;
+	palette[3].r = 0xDB; palette[3].g = 0x28; palette[3].b = 0x00;
+
 	signal(SIGINT, handle_signal);
 
 	if (argc == 1) {
@@ -38,6 +46,11 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	dfh = fopen("debug.log", "w");
+	if (dfh == NULL) {
+		printf("couldn't open debug log\n");
+		return 1;
+	}
 	famicom = famicom_create();
 	if (famicom == NULL) {
 		return 1;
@@ -55,17 +68,15 @@ int main(int argc, char* argv[])
 
 	famicom->debug.rom_name = argv[1];
 	famicom_reset(famicom);
-	SDL_Color palette[4];
-	palette[0].r = 0x00; palette[0].g = 0x00; palette[0].b = 0x00;
-	palette[1].r = 0x00; palette[1].g = 0x00; palette[1].b = 0xAA;
-	palette[2].r = 0xFF; palette[2].g = 0xBE; palette[2].b = 0xB2;
-	palette[3].r = 0xDB; palette[3].g = 0x28; palette[3].b = 0x00;
-	bool debug = false;
 	bool pause = false;
 	SDL_Event e;
+
 	SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
 	SDL_RenderClear(graphics->renderer);
 	SDL_RenderPresent(graphics->renderer);
+	System system;
+	system.h = famicom;
+	system.s = famicom_system;
 	while (famicom->cpu->running) {
 		while( SDL_PollEvent( &e ) != 0 ) {
 			switch(e.type) {
@@ -73,46 +84,31 @@ int main(int argc, char* argv[])
 				famicom->cpu->running = false;
 				break;
 			case SDL_KEYDOWN:
-				switch(e.key.keysym.scancode) {
-				case SDL_SCANCODE_D:
-					debug = !debug;
-					break;
-				case SDL_SCANCODE_P:
-					pause = !pause;
-					break;
-				case SDL_SCANCODE_Q:
+				switch (e.key.keysym.sym) {
+				case SDLK_ESCAPE:
 					famicom->cpu->running = false;
 					break;
-				case SDL_SCANCODE_S:
-					famicom_step(famicom);
+				case SDLK_SPACE:
+					pause = !pause;
 					break;
-				case SDL_SCANCODE_R:
+				case SDLK_LCTRL:
+					famicom_step(famicom);
+					draw_graphics();
+					break;
+				case SDLK_F2:
 					famicom_reset(famicom);
 					break;
 				default:
 					break;
 				}
-				break;
 			}
 		}
 		if (!pause) {
+			write_cpu_state(famicom->cpu, system, dfh);
 			famicom_step(famicom);
 		}
-		if (famicom->cycles % 50 == 0 || debug) {
-			SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
-			SDL_RenderClear(graphics->renderer);
-			if (famicom->chr_size != 0) {
-				draw_nametable(graphics, famicom, 0, 0, palette);
-				draw_oam(graphics, famicom, palette);
-			}
-			if (strcmp(famicom->cpu->current_instruction_name, "") != 0 && debug) {
-				draw_debug(graphics, famicom, 256, 0);
-				if (famicom->chr_size != 0) {
-					draw_pattern_table(graphics, famicom, 0, 256, 100, palette);
-					draw_pattern_table(graphics, famicom, 1, 385, 100, palette);
-				}
-			}
-			SDL_RenderPresent(graphics->renderer);
+		if (famicom->cycles % 1000 == 0 && !pause) {
+			draw_graphics();
 		}
 	}
 	printf("stopping\n");
@@ -133,6 +129,7 @@ void nemu_exit()
 	SDL_DestroyRenderer(graphics->renderer);
 	free(graphics);
 	famicom_destroy(famicom);
+	fclose(dfh);
 }
 
 void handle_signal(int sig)
@@ -140,4 +137,22 @@ void handle_signal(int sig)
 	printf("caught signal, exiting\n");
 	nemu_exit();
 	exit(sig);
+}
+
+void draw_graphics ()
+{
+	SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
+	SDL_RenderClear(graphics->renderer);
+	if (famicom->chr_size != 0) {
+		draw_nametable(graphics, famicom, 0, 0);
+		draw_oam(graphics, famicom, palette);
+	}
+	if (strcmp(famicom->cpu->current_instruction_name, "")) {
+		draw_debug(graphics, famicom, 256, 0);
+		if (famicom->chr_size != 0) {
+			draw_pattern_table(graphics, famicom, 0, 256, 100, palette);
+			draw_pattern_table(graphics, famicom, 1, 385, 100, palette);
+		}
+	}
+	SDL_RenderPresent(graphics->renderer);
 }

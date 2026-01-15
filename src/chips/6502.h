@@ -86,6 +86,7 @@ enum instruction_name {
 typedef struct parsed_instruction {
 	enum addressing_mode a;
 	enum instruction_name n;
+	char* m;
 } Instruction;
 
 typedef struct cpu_6502 {
@@ -98,7 +99,7 @@ typedef struct cpu_6502 {
 	byte oper[2];
 } Cpu_6502;
 
-void print_cpu_state (Cpu_6502* cpu);
+void write_cpu_state (Cpu_6502* cpu, System system, FILE* f);
 void print_addressing_mode(enum addressing_mode a);
 Instruction parse(byte opcode);
 

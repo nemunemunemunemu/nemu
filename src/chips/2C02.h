@@ -12,4 +12,5 @@ typedef struct ppu {
 	byte attribute_table[4][64];
 	byte oam[64][4];
 	byte oam_address;
+	byte palettes[0x20];
 } Famicom_ppu;

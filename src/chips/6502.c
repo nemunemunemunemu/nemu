@@ -179,13 +179,18 @@ void update_p_nz ( Cpu_6502* cpu, byte value )
 	}
 }
 
-void update_p_c ( Cpu_6502* cpu, byte value_old, byte value)
+void update_p_c_ari ( Cpu_6502* cpu, byte value_old, byte value )
 {
-	if (value < value_old) {
-		set_p(cpu, carry, true);
-	} else {
-		set_p(cpu, carry, false);
-	}
+	set_p(cpu, carry, value <= value_old);
+}
+
+void update_p_c_cmp ( Cpu_6502* cpu, byte value_old, byte value )
+{
+	set_p(cpu, carry, value_old <= value);
+}
+
+void update_p_v ( Cpu_6502* cpu, byte value_old, byte value )
+{
 	if (get_bit(value, 0) != get_p(cpu, carry)) {
 		set_p(cpu, overflow, true);
 	} else {
@@ -256,8 +261,9 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 	case logical_shift_right:
 		value = peek(system, cpu, a, oper);
-		set_p(cpu, carry, get_bit(value, 7));
+		set_p(cpu, carry, get_bit(value, 0));
 		value >>= 1;
+		value = set_bit(value, 7, false);
 		poke(system, cpu, a, oper, value);
 		set_p(cpu, zero, cpu->reg[reg_a] == 0);
 		set_p(cpu, negative, get_bit(value, 0));
@@ -265,8 +271,9 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 	case arithmetic_shift_left:
 		value = peek(system, cpu, a, oper);
-		set_p(cpu, carry, get_bit(value, 0));
+		set_p(cpu, carry, get_bit(value, 7));
 		value <<= 1;
+		value = set_bit(value, 0, false);
 		poke(system, cpu, a, oper, value);
 		update_p_nz(cpu, value);
 		break;
@@ -279,18 +286,15 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 			set_p(cpu, negative, false);
 		}
 		set_p(cpu, zero, cpu->reg[r] == value);
-		set_p(cpu, carry, cpu->reg[r] >= value);
+		update_p_c_cmp(cpu, cpu->reg[r], value);
 		break;
 
 	case compare_mem_accumulator:
 		value = peek(system, cpu, a, oper);
-		if ((cpu->reg[reg_a] & value) == 0) {
-			set_p(cpu, zero, true);
-		} else {
-			set_p(cpu, zero, false);
-		}
-		set_p(cpu, negative, get_bit(value, 0));
-		set_p(cpu, overflow, get_bit(value, 1));
+		set_p(cpu, zero, (cpu->reg[reg_a] & value) == 0);
+		set_p(cpu, negative, get_bit(value, 7));
+		set_p(cpu, overflow, get_bit(value, 6));
+		update_p_c_cmp(cpu, cpu->reg[reg_a], value);
 		break;
 
 		//register
@@ -305,7 +309,8 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		value = value_old + cpu->reg[reg_a] + get_p(cpu, carry);
 		set_reg(cpu, r, value);
 		update_p_nz(cpu, value);
-		update_p_c(cpu, value_old, value);
+		update_p_c_ari(cpu, value_old, value);
+		update_p_v(cpu, value_old, value);
 		break;
 
 	case subtract:
@@ -313,7 +318,8 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		value = (cpu->reg[reg_a] - peek(system, cpu, a, oper)) - !get_p(cpu, carry);
 		set_reg(cpu, r, value);
 		update_p_nz(cpu, value);
-		update_p_c(cpu, value_old, value);
+		update_p_c_ari(cpu, value_old, value);
+		update_p_v(cpu, value_old, value);
 		break;
 
 	case increment_reg:
@@ -449,23 +455,6 @@ void nmi(System system, Cpu_6502* cpu)
 	cpu->pc = bytes_to_word(mem_read(system, 0xFFFB), mem_read(system, 0xFFFA));
 }
 
-void print_cpu_state (Cpu_6502* cpu)
-{
-	char* reg_names[] = {
-		"A",
-		"X",
-		"Y",
-		"SP",
-		"P",
-	};
-	for(int i=0;i<sizeof(cpu->reg)/sizeof(byte);i++) {
-		printf("%s:", reg_names[i]);
-		printf("$%X ", cpu->reg[i]);
-	}
-	printf("PC:$%04X \n", cpu->pc);
-	printf("NVUBDIZC ");
-	print_byte_as_bits(cpu->reg[reg_p]);
-}
 
 void print_addressing_mode(enum addressing_mode a)
 {
@@ -1011,342 +1000,387 @@ void step(System system, Cpu_6502* cpu, Instruction i, byte oper[2])
 Instruction parse(byte opcode)
 {
 	Instruction p;
+	p.m = "xxx";
 	switch (opcode)
 	{
-	case 0xEA: p.a = implied; p.n = NOP;
+	case 0xEA: p.a = implied; p.n = NOP; p.m = "nop";
 		break;
 
-	case 0x69: p.a = immediate; p.n = ADC;
+	case 0x69: p.a = immediate; p.n = ADC; p.m = "adc";
 		break;
-	case 0x65: p.a = zeropage; p.n = ADC;
+	case 0x65: p.a = zeropage; p.n = ADC; p.m = "adc";
 		break;
-	case 0x75: p.a = zeropage_x; p.n = ADC;
+	case 0x75: p.a = zeropage_x; p.n = ADC; p.m = "adc";
 		break;
-	case 0x6D: p.a = absolute; p.n = ADC;
+	case 0x6D: p.a = absolute; p.n = ADC; p.m = "adc";
 		break;
-	case 0x7D: p.a = absolute_x; p.n = ADC;
+	case 0x7D: p.a = absolute_x; p.n = ADC; p.m = "adc";
 		break;
-	case 0x79: p.a = absolute_y; p.n = ADC;
+	case 0x79: p.a = absolute_y; p.n = ADC; p.m = "adc";
 		break;
-	case 0x61: p.a = zeropage_xi; p.n = ADC;
+	case 0x61: p.a = zeropage_xi; p.n = ADC; p.m = "adc";
 		break;
-	case 0x71: p.a = zeropage_yi; p.n = ADC;
-		break;
-
-	case 0x29: p.a = immediate; p.n = AND;
-		break;
-	case 0x25: p.a = zeropage; p.n = AND;
-		break;
-	case 0x35: p.a = zeropage_x; p.n = AND;
-		break;
-	case 0x2D: p.a = absolute; p.n = AND;
-		break;
-	case 0x3D: p.a = absolute_x; p.n = AND;
-		break;
-	case 0x39: p.a = absolute_y; p.n = AND;
-		break;
-	case 0x21: p.a = zeropage_xi; p.n = AND;
-		break;
-	case 0x31: p.a = zeropage_yi; p.n = AND;
+	case 0x71: p.a = zeropage_yi; p.n = ADC; p.m = "adc";
 		break;
 
-	case 0x0A: p.a = accumulator; p.n = ASL;
+	case 0x29: p.a = immediate; p.n = AND; p.m = "and";
 		break;
-	case 0x06: p.a = zeropage; p.n = ASL;
+	case 0x25: p.a = zeropage; p.n = AND; p.m = "and";
 		break;
-	case 0x16: p.a = zeropage_x; p.n = ASL;
+	case 0x35: p.a = zeropage_x; p.n = AND; p.m = "and";
 		break;
-	case 0x0E: p.a = absolute; p.n = ASL;
+	case 0x2D: p.a = absolute; p.n = AND; p.m = "and";
 		break;
-	case 0x1E: p.a = absolute_x; p.n = ASL;
+	case 0x3D: p.a = absolute_x; p.n = AND; p.m = "and";
 		break;
-
-	case 0x90: p.a = relative; p.n = BCC;
+	case 0x39: p.a = absolute_y; p.n = AND; p.m = "and";
 		break;
-	case 0xB0: p.a = relative; p.n = BCS;
+	case 0x21: p.a = zeropage_xi; p.n = AND; p.m = "and";
 		break;
-	case 0xF0: p.a = relative; p.n = BEQ;
-		break;
-
-	case 0x24: p.a = zeropage; p.n = BIT;
-		break;
-	case 0x2C: p.a = absolute; p.n = BIT;
+	case 0x31: p.a = zeropage_yi; p.n = AND; p.m = "and";
 		break;
 
-	case 0x30: p.a = relative; p.n = BMI;
+	case 0x0A: p.a = accumulator; p.n = ASL; p.m = "asl";
 		break;
-	case 0xD0: p.a = relative; p.n = BNE;
+	case 0x06: p.a = zeropage; p.n = ASL; p.m = "asl";
 		break;
-	case 0x10: p.a = relative; p.n = BPL;
+	case 0x16: p.a = zeropage_x; p.n = ASL; p.m = "asl";
 		break;
-	case 0x00: p.a = implied; p.n = BRK;
+	case 0x0E: p.a = absolute; p.n = ASL; p.m = "asl";
 		break;
-	case 0x50: p.a = relative; p.n = BVC;
-		break;
-	case 0x70: p.a = relative; p.n = BVS;
-		break;
-	case 0x18: p.a = implied; p.n = CLC;
-		break;
-	case 0xD8: p.a = implied; p.n = CLD;
-		break;
-	case 0x58: p.a = implied; p.n = CLI;
-		break;
-	case 0xB8: p.a = implied; p.n = CLV;
+	case 0x1E: p.a = absolute_x; p.n = ASL; p.m = "asl";
 		break;
 
-	case 0xC9: p.a = immediate; p.n = CMP;
+	case 0x90: p.a = relative; p.n = BCC; p.m = "bcc";
 		break;
-	case 0xC5: p.a = zeropage; p.n = CMP;
+	case 0xB0: p.a = relative; p.n = BCS; p.m = "bcs";
 		break;
-	case 0xD5: p.a = zeropage_x; p.n = CMP;
-		break;
-	case 0xCD: p.a = absolute; p.n = CMP;
-		break;
-	case 0xDD: p.a = absolute_x; p.n = CMP;
-		break;
-	case 0xD9: p.a = absolute_y; p.n = CMP;
-		break;
-	case 0xC1: p.a = zeropage_xi; p.n = CMP;
-		break;
-	case 0xD1: p.a = zeropage_yi; p.n = CMP;
+	case 0xF0: p.a = relative; p.n = BEQ; p.m = "beq";
 		break;
 
-	case 0xE0: p.a = immediate; p.n = CPX;
+	case 0x24: p.a = zeropage; p.n = BIT; p.m = "bit";
 		break;
-	case 0xE4: p.a = zeropage; p.n = CPX;
-		break;
-	case 0xEC: p.a = absolute; p.n = CPX;
+	case 0x2C: p.a = absolute; p.n = BIT; p.m = "bit";
 		break;
 
-	case 0xC0: p.a = immediate; p.n = CPY;
+	case 0x30: p.a = relative; p.n = BMI; p.m = "bmi";
 		break;
-	case 0xC4: p.a = zeropage; p.n = CPY;
+	case 0xD0: p.a = relative; p.n = BNE; p.m = "bne";
 		break;
-	case 0xCC: p.a = absolute; p.n = CPY;
+	case 0x10: p.a = relative; p.n = BPL; p.m = "bpl";
 		break;
-
-	case 0xC6: p.a = zeropage; p.n = DEC;
+	case 0x00: p.a = implied; p.n = BRK; p.m = "brk";
 		break;
-	case 0xD6: p.a = zeropage_x; p.n = DEC;
+	case 0x50: p.a = relative; p.n = BVC; p.m = "bvc";
 		break;
-	case 0xCE: p.a = absolute; p.n = DEC;
+	case 0x70: p.a = relative; p.n = BVS; p.m = "bvs";
 		break;
-	case 0xDE: p.a = absolute_x; p.n = DEC;
+	case 0x18: p.a = implied; p.n = CLC; p.m = "clc";
 		break;
-
-	case 0xCA: p.a = implied; p.n = DEX;
+	case 0xD8: p.a = implied; p.n = CLD; p.m = "cld";
 		break;
-	case 0x88: p.a = implied; p.n = DEY;
+	case 0x58: p.a = implied; p.n = CLI; p.m = "cli";
 		break;
-
-	case 0x49: p.a = immediate; p.n = EOR;
-		break;
-	case 0x45: p.a = zeropage; p.n = EOR;
-		break;
-	case 0x55: p.a = zeropage_x; p.n = EOR;
-		break;
-	case 0x4D: p.a = absolute; p.n = EOR;
-		break;
-	case 0x5D: p.a = absolute_x; p.n = EOR;
-		break;
-	case 0x59: p.a = absolute_y; p.n = EOR;
-		break;
-	case 0x41: p.a = zeropage_xi; p.n = EOR;
-		break;
-	case 0x51: p.a = zeropage_yi; p.n = EOR;
+	case 0xB8: p.a = implied; p.n = CLV; p.m = "clv";
 		break;
 
-	case 0xE6: p.a = zeropage; p.n = INC;
+	case 0xC9: p.a = immediate; p.n = CMP; p.m = "cmp";
 		break;
-	case 0xF6: p.a = zeropage_x; p.n = INC;
+	case 0xC5: p.a = zeropage; p.n = CMP; p.m = "cmp";
 		break;
-	case 0xEE: p.a = absolute; p.n = INC;
+	case 0xD5: p.a = zeropage_x; p.n = CMP; p.m = "cmp";
 		break;
-	case 0xFE: p.a = absolute_x; p.n = INC;
+	case 0xCD: p.a = absolute; p.n = CMP; p.m = "cmp";
 		break;
-
-	case 0xE8: p.a = implied; p.n = INX;
+	case 0xDD: p.a = absolute_x; p.n = CMP; p.m = "cmp";
 		break;
-	case 0xC8: p.a = implied; p.n = INY;
+	case 0xD9: p.a = absolute_y; p.n = CMP; p.m = "cmp";
 		break;
-
-	case 0x4C: p.a = absolute; p.n = JMP;
+	case 0xC1: p.a = zeropage_xi; p.n = CMP; p.m = "cmp";
 		break;
-	case 0x6C: p.a = absolute_indirect; p.n = JMP;
+	case 0xD1: p.a = zeropage_yi; p.n = CMP; p.m = "cmp";
 		break;
 
-	case 0x20: p.a = absolute; p.n = JSR;
+	case 0xE0: p.a = immediate; p.n = CPX; p.m = "cpx";
+		break;
+	case 0xE4: p.a = zeropage; p.n = CPX; p.m = "cpx";
+		break;
+	case 0xEC: p.a = absolute; p.n = CPX; p.m = "cpx";
 		break;
 
-	case 0xAD: p.a = absolute; p.n = LDA;
+	case 0xC0: p.a = immediate; p.n = CPY; p.m = "cpy";
 		break;
-	case 0xBD: p.a = absolute_x; p.n = LDA;
+	case 0xC4: p.a = zeropage; p.n = CPY; p.m = "cpy";
 		break;
-	case 0xB9: p.a = absolute_y; p.n = LDA;
-		break;
-	case 0xA9: p.a = immediate; p.n = LDA;
-		break;
-	case 0xA5: p.a = zeropage; p.n = LDA;
-		break;
-	case 0xA1: p.a = zeropage_xi; p.n = LDA;
-		break;
-	case 0xB5: p.a = zeropage_x; p.n = LDA;
-		break;
-	case 0xB1: p.a = zeropage_yi; p.n = LDA;
+	case 0xCC: p.a = absolute; p.n = CPY; p.m = "cpy";
 		break;
 
-	case 0xA2: p.a = immediate; p.n = LDX;
+	case 0xC6: p.a = zeropage; p.n = DEC; p.m = "dec";
 		break;
-	case 0xA6: p.a = zeropage; p.n = LDX;
+	case 0xD6: p.a = zeropage_x; p.n = DEC; p.m = "dec";
 		break;
-	case 0xB6: p.a = zeropage_y; p.n = LDX;
+	case 0xCE: p.a = absolute; p.n = DEC; p.m = "dec";
 		break;
-	case 0xAE: p.a = absolute; p.n = LDX;
-		break;
-	case 0xBE: p.a = absolute_y; p.n = LDX;
+	case 0xDE: p.a = absolute_x; p.n = DEC; p.m = "dec";
 		break;
 
-	case 0xA0: p.a = immediate; p.n = LDY;
+	case 0xCA: p.a = implied; p.n = DEX; p.m = "dex";
 		break;
-	case 0xA4: p.a = zeropage; p.n = LDY;
-		break;
-	case 0xB4: p.a = zeropage_x; p.n = LDY;
-		break;
-	case 0xAC: p.a = absolute; p.n = LDY;
-		break;
-	case 0xBC: p.a = absolute_x; p.n = LDY;
+	case 0x88: p.a = implied; p.n = DEY; p.m = "dey";
 		break;
 
-	case 0x4A: p.a = accumulator; p.n = LSR;
+	case 0x49: p.a = immediate; p.n = EOR; p.m = "eor";
 		break;
-	case 0x46: p.a = zeropage; p.n = LSR;
+	case 0x45: p.a = zeropage; p.n = EOR; p.m = "eor";
 		break;
-	case 0x56: p.a = zeropage_x; p.n = LSR;
+	case 0x55: p.a = zeropage_x; p.n = EOR; p.m = "eor";
 		break;
-	case 0x4E: p.a = absolute; p.n = LSR;
+	case 0x4D: p.a = absolute; p.n = EOR; p.m = "eor";
 		break;
-	case 0x5E: p.a = absolute_x; p.n = LSR;
+	case 0x5D: p.a = absolute_x; p.n = EOR; p.m = "eor";
 		break;
-
-	case 0x09: p.a = immediate; p.n = ORA;
+	case 0x59: p.a = absolute_y; p.n = EOR; p.m = "eor";
 		break;
-	case 0x05: p.a = zeropage; p.n = ORA;
+	case 0x41: p.a = zeropage_xi; p.n = EOR; p.m = "eor";
 		break;
-	case 0x15: p.a = zeropage_x; p.n = ORA;
-		break;
-	case 0x0D: p.a = absolute; p.n = ORA;
-		break;
-	case 0x1D: p.a = absolute_x; p.n = ORA;
-		break;
-	case 0x19: p.a = absolute_y; p.n = ORA;
-		break;
-	case 0x01: p.a = zeropage_xi; p.n = ORA;
-		break;
-	case 0x11: p.a = zeropage_yi; p.n = ORA;
+	case 0x51: p.a = zeropage_yi; p.n = EOR; p.m = "eor";
 		break;
 
-	case 0x48: p.a = implied; p.n = PHA;
+	case 0xE6: p.a = zeropage; p.n = INC; p.m = "inc";
 		break;
-	case 0x08: p.a = implied; p.n = PHP;
+	case 0xF6: p.a = zeropage_x; p.n = INC; p.m = "inc";
 		break;
-	case 0x68: p.a = implied; p.n = PLA;
+	case 0xEE: p.a = absolute; p.n = INC; p.m = "inc";
 		break;
-	case 0x28: p.a = implied; p.n = PLP;
-		break;
-
-	case 0x2A: p.a = accumulator; p.n = ROL;
-		break;
-	case 0x26: p.a = zeropage; p.n = ROL;
-		break;
-	case 0x36: p.a = zeropage_x; p.n = ROL;
-		break;
-	case 0x2E: p.a = absolute; p.n = ROL;
-		break;
-	case 0x3E: p.a = absolute_x; p.n = ROL;
+	case 0xFE: p.a = absolute_x; p.n = INC; p.m = "inc";
 		break;
 
-	case 0x6A: p.a = accumulator; p.n = ROR;
+	case 0xE8: p.a = implied; p.n = INX; p.m = "inx";
 		break;
-	case 0x66: p.a = zeropage; p.n = ROR;
-		break;
-	case 0x76: p.a = zeropage_x; p.n = ROR;
-		break;
-	case 0x6E: p.a = absolute; p.n = ROR;
-		break;
-	case 0x7E: p.a = absolute_x; p.n = ROR;
+	case 0xC8: p.a = implied; p.n = INY; p.m = "iny";
 		break;
 
-	case 0x40: p.a = implied; p.n = RTI;
+	case 0x4C: p.a = absolute; p.n = JMP; p.m = "jmp";
 		break;
-	case 0x60: p.a = implied; p.n = RTS;
-		break;
-
-	case 0xE9: p.a = immediate; p.n = SBC;
-		break;
-	case 0xE5: p.a = zeropage; p.n = SBC;
-		break;
-	case 0xF5: p.a = zeropage_x; p.n = SBC;
-		break;
-	case 0xED: p.a = absolute; p.n = SBC;
-		break;
-	case 0xFD: p.a = absolute_x; p.n = SBC;
-		break;
-	case 0xF9: p.a = absolute_y; p.n = SBC;
-		break;
-	case 0xE1: p.a = zeropage_xi; p.n = SBC;
-		break;
-	case 0xF1: p.a = zeropage_yi; p.n = SBC;
+	case 0x6C: p.a = absolute_indirect; p.n = JMP; p.m = "jmp";
 		break;
 
-	case 0x38: p.a = implied; p.n = SEC;
-		break;
-	case 0xF8: p.a = implied; p.n = SED;
-		break;
-	case 0x78: p.a = implied; p.n = SEI;
+	case 0x20: p.a = absolute; p.n = JSR; p.m = "jsr";
 		break;
 
-	case 0x85: p.a = zeropage; p.n = STA;
+	case 0xAD: p.a = absolute; p.n = LDA; p.m = "lda";
 		break;
-	case 0x95: p.a = zeropage_x; p.n = STA;
+	case 0xBD: p.a = absolute_x; p.n = LDA; p.m = "lda";
 		break;
-	case 0x8D: p.a = absolute; p.n = STA;
+	case 0xB9: p.a = absolute_y; p.n = LDA; p.m = "lda";
 		break;
-	case 0x9D: p.a = absolute_x; p.n = STA;
+	case 0xA9: p.a = immediate; p.n = LDA; p.m = "lda";
 		break;
-	case 0x99: p.a = absolute_y; p.n = STA;
+	case 0xA5: p.a = zeropage; p.n = LDA; p.m = "lda";
 		break;
-	case 0x81: p.a = zeropage_xi; p.n = STA;
+	case 0xA1: p.a = zeropage_xi; p.n = LDA; p.m = "lda";
 		break;
-	case 0x91: p.a = zeropage_yi; p.n = STA;
+	case 0xB5: p.a = zeropage_x; p.n = LDA; p.m = "lda";
 		break;
-
-	case 0x86: p.a = zeropage; p.n = STX;
-		break;
-	case 0x96: p.a = zeropage_y; p.n = STX;
-		break;
-	case 0x8E: p.a = absolute; p.n = STX;
+	case 0xB1: p.a = zeropage_yi; p.n = LDA; p.m = "lda";
 		break;
 
-	case 0x84: p.a = zeropage; p.n = STY;
+	case 0xA2: p.a = immediate; p.n = LDX; p.m = "ldx";
 		break;
-	case 0x94: p.a = zeropage_x; p.n = STY;
+	case 0xA6: p.a = zeropage; p.n = LDX; p.m = "ldx";
 		break;
-	case 0x8C: p.a = absolute; p.n = STY;
+	case 0xB6: p.a = zeropage_y; p.n = LDX; p.m = "ldx";
+		break;
+	case 0xAE: p.a = absolute; p.n = LDX; p.m = "ldx";
+		break;
+	case 0xBE: p.a = absolute_y; p.n = LDX; p.m = "ldx";
 		break;
 
-	case 0xAA: p.a = implied; p.n = TAX;
+	case 0xA0: p.a = immediate; p.n = LDY; p.m = "ldy";
 		break;
-	case 0xA8: p.a = implied; p.n = TAY;
+	case 0xA4: p.a = zeropage; p.n = LDY; p.m = "ldy";
 		break;
-	case 0xBA: p.a = implied; p.n = TSX;
+	case 0xB4: p.a = zeropage_x; p.n = LDY; p.m = "ldy";
 		break;
-	case 0x8A: p.a = implied; p.n = TXA;
+	case 0xAC: p.a = absolute; p.n = LDY; p.m = "ldy";
 		break;
-	case 0x9A: p.a = implied; p.n = TXS;
+	case 0xBC: p.a = absolute_x; p.n = LDY; p.m = "ldy";
 		break;
-	case 0x98: p.a = implied; p.n = TYA;
+
+	case 0x4A: p.a = accumulator; p.n = LSR; p.m = "lsr";
 		break;
-	default: p.a = implied; p.n = unimplemented;
+	case 0x46: p.a = zeropage; p.n = LSR; p.m = "lsr";
+		break;
+	case 0x56: p.a = zeropage_x; p.n = LSR; p.m = "lsr";
+		break;
+	case 0x4E: p.a = absolute; p.n = LSR; p.m = "lsr";
+		break;
+	case 0x5E: p.a = absolute_x; p.n = LSR; p.m = "lsr";
+		break;
+
+	case 0x09: p.a = immediate; p.n = ORA; p.m = "ora";
+		break;
+	case 0x05: p.a = zeropage; p.n = ORA; p.m = "ora";
+		break;
+	case 0x15: p.a = zeropage_x; p.n = ORA; p.m = "ora";
+		break;
+	case 0x0D: p.a = absolute; p.n = ORA; p.m = "ora";
+		break;
+	case 0x1D: p.a = absolute_x; p.n = ORA; p.m = "ora";
+		break;
+	case 0x19: p.a = absolute_y; p.n = ORA; p.m = "ora";
+		break;
+	case 0x01: p.a = zeropage_xi; p.n = ORA; p.m = "ora";
+		break;
+	case 0x11: p.a = zeropage_yi; p.n = ORA; p.m = "ora";
+		break;
+
+	case 0x48: p.a = implied; p.n = PHA; p.m = "pha";
+		break;
+	case 0x08: p.a = implied; p.n = PHP; p.m = "php";
+		break;
+	case 0x68: p.a = implied; p.n = PLA; p.m = "pla";
+		break;
+	case 0x28: p.a = implied; p.n = PLP; p.m = "plp";
+		break;
+
+	case 0x2A: p.a = accumulator; p.n = ROL; p.m = "rol";
+		break;
+	case 0x26: p.a = zeropage; p.n = ROL; p.m = "rol";
+		break;
+	case 0x36: p.a = zeropage_x; p.n = ROL; p.m = "rol";
+		break;
+	case 0x2E: p.a = absolute; p.n = ROL; p.m = "rol";
+		break;
+	case 0x3E: p.a = absolute_x; p.n = ROL; p.m = "rol";
+		break;
+
+	case 0x6A: p.a = accumulator; p.n = ROR; p.m = "ror";
+		break;
+	case 0x66: p.a = zeropage; p.n = ROR; p.m = "ror";
+		break;
+	case 0x76: p.a = zeropage_x; p.n = ROR; p.m = "ror";
+		break;
+	case 0x6E: p.a = absolute; p.n = ROR; p.m = "ror";
+		break;
+	case 0x7E: p.a = absolute_x; p.n = ROR; p.m = "ror";
+		break;
+
+	case 0x40: p.a = implied; p.n = RTI; p.m = "rti";
+		break;
+	case 0x60: p.a = implied; p.n = RTS; p.m = "rts";
+		break;
+
+	case 0xE9: p.a = immediate; p.n = SBC; p.m = "sbc";
+		break;
+	case 0xE5: p.a = zeropage; p.n = SBC; p.m = "sbc";
+		break;
+	case 0xF5: p.a = zeropage_x; p.n = SBC; p.m = "sbc";
+		break;
+	case 0xED: p.a = absolute; p.n = SBC; p.m = "sbc";
+		break;
+	case 0xFD: p.a = absolute_x; p.n = SBC; p.m = "sbc";
+		break;
+	case 0xF9: p.a = absolute_y; p.n = SBC; p.m = "sbc";
+		break;
+	case 0xE1: p.a = zeropage_xi; p.n = SBC; p.m = "sbc";
+		break;
+	case 0xF1: p.a = zeropage_yi; p.n = SBC; p.m = "sbc";
+		break;
+
+	case 0x38: p.a = implied; p.n = SEC; p.m = "sec";
+		break;
+	case 0xF8: p.a = implied; p.n = SED; p.m = "sed";
+		break;
+	case 0x78: p.a = implied; p.n = SEI; p.m = "sei";
+		break;
+
+	case 0x85: p.a = zeropage; p.n = STA; p.m = "sta";
+		break;
+	case 0x95: p.a = zeropage_x; p.n = STA; p.m = "sta";
+		break;
+	case 0x8D: p.a = absolute; p.n = STA; p.m = "sta";
+		break;
+	case 0x9D: p.a = absolute_x; p.n = STA; p.m = "sta";
+		break;
+	case 0x99: p.a = absolute_y; p.n = STA; p.m = "sta";
+		break;
+	case 0x81: p.a = zeropage_xi; p.n = STA; p.m = "sta";
+		break;
+	case 0x91: p.a = zeropage_yi; p.n = STA; p.m = "sta";
+		break;
+
+	case 0x86: p.a = zeropage; p.n = STX; p.m = "stx";
+		break;
+	case 0x96: p.a = zeropage_y; p.n = STX; p.m = "stx";
+		break;
+	case 0x8E: p.a = absolute; p.n = STX; p.m = "stx";
+		break;
+
+	case 0x84: p.a = zeropage; p.n = STY; p.m = "sty";
+		break;
+	case 0x94: p.a = zeropage_x; p.n = STY; p.m = "sty";
+		break;
+	case 0x8C: p.a = absolute; p.n = STY; p.m = "sty";
+		break;
+
+	case 0xAA: p.a = implied; p.n = TAX; p.m = "tax";
+		break;
+	case 0xA8: p.a = implied; p.n = TAY; p.m = "tay";
+		break;
+	case 0xBA: p.a = implied; p.n = TSX; p.m = "tsx";
+		break;
+	case 0x8A: p.a = implied; p.n = TXA; p.m = "txa";
+		break;
+	case 0x9A: p.a = implied; p.n = TXS; p.m = "txs";
+		break;
+	case 0x98: p.a = implied; p.n = TYA; p.m = "tya";
+		break;
+	default: p.a = implied; p.n = unimplemented; p.m = "XXX";
+		break;
 	}
 	return p;
+}
+
+void write_cpu_state (Cpu_6502* cpu, System system, FILE* f)
+{
+	char* reg_names[] = {
+		"A",
+		"X",
+		"Y",
+		"SP",
+		"P",
+	};
+	for(int i=0;i<sizeof(cpu->reg)/sizeof(byte);i++) {
+		fprintf(f, "%s:", reg_names[i]);
+		fprintf(f, "$%X ", cpu->reg[i]);
+	}
+	fprintf(f, "PC:$%04X \n", cpu->pc);
+	fprintf(f,"NVUBDIZC ");
+	for (int i = 7; 0 <= i; i--) {
+		fprintf(f, "%c", (cpu->reg[reg_p] & (1 << i)) ? '1' : '0');
+	}
+	Instruction i = parse(mem_read(system, cpu->pc));
+	byte oper1 = cpu->pc + 1;
+	byte oper2 = cpu->pc + 2;
+
+	word opera = bytes_to_word(oper2, oper1);
+	char addr_mode[50];
+	switch (i.a) {
+	case accumulator: case implied:
+		snprintf(addr_mode, sizeof(addr_mode), " ");
+		break;
+	case immediate: case zeropage: case zeropage_x: case zeropage_y: case zeropage_xi: case zeropage_yi:
+		snprintf(addr_mode, sizeof(addr_mode), "(%X) ", oper1);
+		break;
+	case relative:
+		snprintf(addr_mode, sizeof(addr_mode), "%d (%X)", (int8_t)oper1, oper1);
+		break;
+	case absolute: case absolute_indirect: case absolute_x: case absolute_y:
+		snprintf(addr_mode, sizeof(addr_mode), "0x%X", opera);
+		break;
+	}
+	fprintf(f, "\n%s %s\n", i.m, addr_mode);
+	fprintf(f, "---------------------------\n");
+
 }

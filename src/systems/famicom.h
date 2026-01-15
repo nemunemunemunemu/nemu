@@ -5,10 +5,23 @@ typedef struct famicom_debug {
 	bool irq;
 } Famicom_debug;
 
+typedef struct famicom_controller {
+	bool up;
+	bool down;
+	bool left;
+	bool right;
+	bool button_a;
+	bool button_b;
+	bool select;
+	bool start;
+} Famicom_controller;
+
 typedef struct famicom {
+	Cpu_6502* cpu;
 	Famicom_ppu* ppu;
 	Famicom_debug debug;
-	Cpu_6502* cpu;
+	Famicom_controller controller_p1;
+	Famicom_controller controller_p2;
 	int cycles;
 	int prg_size;
 	int chr_size;

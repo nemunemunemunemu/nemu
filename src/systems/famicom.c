@@ -137,6 +137,7 @@ enum ppu_mmapped_register {
 };
 const word OAMDMA = 0x4014;
 
+
 byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 {
 	 // zero page
@@ -153,9 +154,9 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		switch (ppu_reg) {
 		case PPUCTRL:
 			if (write) {
-				//f->ppu->vram_increment = get_bit(value, 2);
+				f->ppu->vram_increment = get_bit(value, 2);
 				f->ppu->nmi_enable = get_bit(value, 7);
-				f->ppu->sprite_pattern_table = get_bit(value, 5);
+				f->ppu->sprite_pattern_table = get_bit(value, 3);
 				f->ppu->bg_pattern_table = get_bit(value, 4);
 				//f->ppu->nametable_base = value & 0x03;
 				return 0;
@@ -210,6 +211,8 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 					f->ppu->nametable[1][address - 0x2400] = value;
 				} else if (0x27BF < address && address < 0x2800) {
 					f->ppu->attribute_table[1][address - 0x27C0] = value;
+				} else if (0x3F1F < address && address < 0x4000 ) {
+					f->ppu->palettes[address - 0x3F00] = value;
 				}
 				if (f->ppu->vram_increment) {
 					f->ppu->address += 32;
@@ -235,6 +238,14 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 				}
 			}
 			return 0;
+		case 0x4016:
+		case 0x4017:
+			if (write)
+				break;
+			byte controllerbits;
+			//controllerbits = set_bit(controllerbits, 4, true);
+			//controllerbits = set_bit(controllerbits, 5, true);
+			return controllerbits;
 		default:
 			return 0;
 		}
