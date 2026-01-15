@@ -1,6 +1,7 @@
-bin
+bin/*
 .clang-format
 compile_commands.json
+roms
 .cache
 *.core
 *.bin

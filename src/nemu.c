@@ -18,7 +18,9 @@
 Famicom* famicom;
 SDL_Instance* graphics;
 SDL_Color palette[4];
+bool debug_file;
 FILE* dfh;
+
 
 void usage(char* name);
 void handle_signal(int sig);
@@ -46,10 +48,16 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	dfh = fopen("debug.log", "w");
-	if (dfh == NULL) {
-		printf("couldn't open debug log\n");
-		return 1;
+	if (2 < argc) {
+		if (strcmp("-debug", argv[2]) == 0) {
+			printf("logging to file\n");
+			debug_file = true;
+			dfh = fopen("debug.log", "w");
+			if (dfh == NULL) {
+				printf("couldn't open debug log\n");
+				return 1;
+			}
+		}
 	}
 	famicom = famicom_create();
 	if (famicom == NULL) {
@@ -104,7 +112,8 @@ int main(int argc, char* argv[])
 			}
 		}
 		if (!pause) {
-			write_cpu_state(famicom->cpu, system, dfh);
+			if (debug_file)
+				write_cpu_state(famicom->cpu, system, dfh);
 			famicom_step(famicom);
 		}
 		if (famicom->cycles % 1000 == 0 && !pause) {
@@ -125,11 +134,10 @@ void usage (char* name)
 
 void nemu_exit()
 {
-	SDL_DestroyWindow(graphics->window);
-	SDL_DestroyRenderer(graphics->renderer);
-	free(graphics);
+	graphics_destroy(graphics);
 	famicom_destroy(famicom);
-	fclose(dfh);
+	if (debug_file)
+		fclose(dfh);
 }
 
 void handle_signal(int sig)
@@ -143,16 +151,19 @@ void draw_graphics ()
 {
 	SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
 	SDL_RenderClear(graphics->renderer);
+	SDL_SetRenderDrawColor(graphics->renderer_debug, 0,0,0x80,0xFF);
+	SDL_RenderClear(graphics->renderer_debug);
 	if (famicom->chr_size != 0) {
 		draw_nametable(graphics, famicom, 0, 0);
 		draw_oam(graphics, famicom, palette);
 	}
 	if (strcmp(famicom->cpu->current_instruction_name, "")) {
-		draw_debug(graphics, famicom, 256, 0);
+		draw_debug(graphics, famicom, 0, 0);
 		if (famicom->chr_size != 0) {
-			draw_pattern_table(graphics, famicom, 0, 256, 100, palette);
-			draw_pattern_table(graphics, famicom, 1, 385, 100, palette);
+			draw_pattern_table(graphics, famicom, 0, 0, 100, palette);
+			draw_pattern_table(graphics, famicom, 1, 129, 100, palette);
 		}
 	}
 	SDL_RenderPresent(graphics->renderer);
+	SDL_RenderPresent(graphics->renderer_debug);
 }

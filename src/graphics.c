@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <stdlib.h>
 #include "types.h"
 #include "bitmath.h"
 #include "systems/system.h"
@@ -8,8 +9,12 @@
 #include "graphics.h"
 #include "inprint/SDL2_inprint.h"
 
-const int window_width = 514;
+const int window_width = 256;
 const int window_height = 256;
+
+const int debug_window_width = 257;
+const int debug_window_height = 256;
+
 SDL_Instance* init_graphics()
 {
 	SDL_Instance* instance;
@@ -33,9 +38,30 @@ SDL_Instance* init_graphics()
 		SDL_Quit();
 		return NULL;
 	}
-	inrenderer(instance->renderer);
+	instance->window_debug = SDL_CreateWindow("debug", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, debug_window_width, debug_window_height, 0);
+	if (instance->window_debug == NULL) {
+		printf("unable to create window: %s\n", SDL_GetError());
+		SDL_Quit();
+		return NULL;
+	}
+	instance->renderer_debug = SDL_CreateRenderer(instance->window_debug, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+	if (instance->renderer_debug == NULL) {
+		printf("unable to create renderer: %s\n", SDL_GetError());
+		SDL_Quit();
+		return NULL;
+	}
+	inrenderer(instance->renderer_debug);
 	prepare_inline_font();
 	return instance;
+}
+
+void graphics_destroy(SDL_Instance* graphics)
+{
+	SDL_DestroyWindow(graphics->window);
+	SDL_DestroyRenderer(graphics->renderer);
+	SDL_DestroyWindow(graphics->window_debug);
+	SDL_DestroyRenderer(graphics->renderer_debug);
+	free(graphics);
 }
 
 void draw_debug(SDL_Instance* g, Famicom* f, int x, int y)
@@ -46,12 +72,12 @@ void draw_debug(SDL_Instance* g, Famicom* f, int x, int y)
 	incolor(WHITE, 0);
 	char romstatus[50];
 	snprintf(romstatus, sizeof(romstatus), "%s, %d", f->debug.rom_name, f->debug.rom_mapper);
-	inprint(g->renderer, romstatus, x,  y);
+	inprint(g->renderer_debug, romstatus, x,  y);
 
 	char cpustatus[50];
 	snprintf(cpustatus, sizeof(cpustatus), "PC:%0X A:%0X X:%0X Y:%0X S:%0X",
 	    f->cpu->pc, f->cpu->reg[reg_a], f->cpu->reg[reg_x], f->cpu->reg[reg_y], f->cpu->reg[reg_sp]);
-	inprint(g->renderer, cpustatus, x,  y+9);
+	inprint(g->renderer_debug, cpustatus, x,  y+9);
 
 	char istatus[50];
 	Instruction i = f->cpu->current_instruction;
@@ -91,27 +117,27 @@ void draw_debug(SDL_Instance* g, Famicom* f, int x, int y)
 		} else {
 			incolor(GREY, 0);
 		}
-		inprint(g->renderer, flags[i], x+(i*9), y+18);
+		inprint(g->renderer_debug, flags[i], x+(i*9), y+18);
 	}
 	incolor(0xffffff, 0);
-	inprint(g->renderer, istatus, x,  y+27);
+	inprint(g->renderer_debug, istatus, x,  y+27);
 	if (f->debug.nmi) {
 		incolor(GREEN, 0);
 	} else {
 		incolor(GREY, 0);
 	}
-	inprint(g->renderer, "nmi", x,  y+36);
+	inprint(g->renderer_debug, "nmi", x,  y+36);
 	incolor(WHITE, 0);
 	char ppustatus[50];
 	char ppuctrl[50];
 	snprintf(ppuctrl, sizeof(ppuctrl), "%X00%X%X%X%X",
 	    f->ppu->nmi_enable, f->ppu->bg_pattern_table, f->ppu->sprite_pattern_table, f->ppu->vram_increment, f->ppu->nametable_base);
 	snprintf(ppustatus, sizeof(ppustatus), "%s  %0X        %0X", ppuctrl, f->ppu->address, f->ppu->oam_address);
-	inprint(g->renderer, ppustatus, x, y+45);
-	inprint(g->renderer, "PPUCTRL  PPUADDR  OAMADDR", x, y+54);
+	inprint(g->renderer_debug, ppustatus, x, y+45);
+	inprint(g->renderer_debug, "PPUCTRL  PPUADDR  OAMADDR", x, y+54);
 }
 
-void draw_tile(SDL_Instance* g, Famicom* f, int tile, int x_offset, int y_offset, bool mirrored, int table, SDL_Color palette[])
+void draw_tile(SDL_Renderer* r, Famicom* f, int tile, int x_offset, int y_offset, bool mirrored, int table, SDL_Color palette[])
 {
 	word table_start;
 	if (table == 0) {
@@ -132,15 +158,15 @@ void draw_tile(SDL_Instance* g, Famicom* f, int tile, int x_offset, int y_offset
 			byte first_bit = get_bit(plane1, x);
 			byte second_bit = get_bit(plane2, x);
 			if (first_bit == 0 && second_bit == 0) {
-				SDL_SetRenderDrawColor(g->renderer, palette[0].r, palette[0].g, palette[0].b, 0xFF);
+				SDL_SetRenderDrawColor(r, palette[0].r, palette[0].g, palette[0].b, 0xFF);
 			} else if (first_bit == 1 && second_bit == 0) {
-				SDL_SetRenderDrawColor(g->renderer, palette[1].r, palette[1].g, palette[1].b, 0xFF);
+				SDL_SetRenderDrawColor(r, palette[1].r, palette[1].g, palette[1].b, 0xFF);
 			} else if (first_bit == 0 && second_bit == 1) {
-				SDL_SetRenderDrawColor(g->renderer, palette[2].r, palette[2].g, palette[2].b, 0xFF);
+				SDL_SetRenderDrawColor(r, palette[2].r, palette[2].g, palette[2].b, 0xFF);
 			} else if (first_bit == 1 && second_bit == 1) {
-				SDL_SetRenderDrawColor(g->renderer, palette[3].r, palette[3].g, palette[3].b, 0xFF);
+				SDL_SetRenderDrawColor(r, palette[3].r, palette[3].g, palette[3].b, 0xFF);
 			}
-			SDL_RenderDrawPoint(g->renderer, x + x_offset, y + y_offset);
+			SDL_RenderDrawPoint(r, x + x_offset, y + y_offset);
 		}
 	}
 }
@@ -150,7 +176,7 @@ void draw_pattern_table(SDL_Instance* g, Famicom* f, int table, int x_offset, in
 	int i = 0;
 	for (int y=0; y<16; y++) {
 		for (int x=0; x<16; x++) {
-			draw_tile(g, f, i, (x*8)+x_offset, (y*8)+y_offset, false, table, palette);
+			draw_tile(g->renderer_debug, f, i, (x*8)+x_offset, (y*8)+y_offset, false, table, palette);
 			i = i + 16;
 		}
 	}
@@ -167,7 +193,7 @@ void draw_nametable(SDL_Instance* g, Famicom* f, int x, int y)
 	for (int y=0;y<30;y++) {
 		for (int x=0;x<32;x++) {
 			byte attr = f->ppu->attribute_table[0][8*(y/4)+(x/4)];
-			draw_tile(g, f, f->ppu->nametable[f->ppu->nametable_base][32*y+x]*16, (x*8), (y*8), false, f->ppu->bg_pattern_table, palette);
+			draw_tile(g->renderer, f, f->ppu->nametable[f->ppu->nametable_base][32*y+x]*16, (x*8), (y*8), false, f->ppu->bg_pattern_table, palette);
 		}
 	}
 	/*
@@ -187,6 +213,7 @@ void draw_oam(SDL_Instance* g, Famicom* f, SDL_Color palette[])
 		byte sprite_y = f->ppu->oam[i][0];
 		byte tile = f->ppu->oam[i][1]*16;
 		byte sprite_x = f->ppu->oam[i][3];
-		draw_tile(g, f, tile, sprite_x, sprite_y, false, f->ppu->sprite_pattern_table, palette);
+		draw_tile(g->renderer, f, tile, sprite_x, sprite_y, false, f->ppu->sprite_pattern_table, palette);
 	}
 }
+

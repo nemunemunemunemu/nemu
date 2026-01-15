@@ -422,7 +422,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		if (get_p(cpu, f) == 0) {
 			cpu->pc = addr;
 		}
-                break;
+		break;
 
 	case push_reg_stack:
 		push_stack(system, cpu, cpu->reg[r]);
