@@ -6,7 +6,7 @@ OBJ =  ${SRC:.c=.o}
 all: nemu
 
 .c.o:
-	cd bin && ${CC} -c ${CFLAGS} ../$< && cd ..
+	mkdir -p bin && cd bin && ${CC} -c ${CFLAGS} ../$<
 
 nemu: ${OBJ}
 	${CC} -o bin/$@ bin/*.o ${LDFLAGS}
