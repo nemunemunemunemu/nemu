@@ -5,6 +5,17 @@ typedef struct famicom_debug {
 	bool irq;
 } Famicom_debug;
 
+enum famicom_joypad_buttons {
+	joypad_right,
+	joypad_left,
+	joypad_down,
+	joypad_up,
+	joypad_start,
+	joypad_select,
+	joypad_b,
+	joypad_a,
+};
+
 typedef struct famicom_controller {
 	bool up;
 	bool down;
@@ -20,8 +31,6 @@ typedef struct famicom {
 	Cpu_6502* cpu;
 	Famicom_ppu* ppu;
 	Famicom_debug debug;
-	Famicom_controller controller_p1;
-	Famicom_controller controller_p2;
 	int cycles;
 	int prg_size;
 	int chr_size;
@@ -29,6 +38,12 @@ typedef struct famicom {
 	byte* prg;
 	byte* chr;
 	byte oam[64][4];
+
+	Famicom_controller controller_p1;
+	Famicom_controller controller_p2;
+	bool last_4016_write;
+	bool poll_controller;
+	int controller_bit;
 } Famicom;
 
 Famicom* famicom_create ();

@@ -30,7 +30,7 @@ enum operation {
 	branch_conditional_flag,
 	branch_conditional_flag_clear,
 	compare_reg_mem,
-	compare_mem_accumulator,
+	compare_bit,
 	transfer_reg_a,
 	transfer_reg_x,
 	transfer_reg_sp,

@@ -21,7 +21,6 @@ SDL_Color palette[4];
 bool debug_file;
 FILE* dfh;
 
-
 void usage(char* name);
 void handle_signal(int sig);
 void nemu_exit();
@@ -105,6 +104,27 @@ int main(int argc, char* argv[])
 					break;
 				case SDLK_F2:
 					famicom_reset(famicom);
+					draw_graphics();
+					break;
+				case SDLK_RETURN:
+					famicom->controller_p1.start = true;
+					draw_graphics();
+					break;
+				case SDLK_UP:
+					famicom->controller_p1.up = true;
+					draw_graphics();
+					break;
+				case SDLK_DOWN:
+					famicom->controller_p1.down = true;
+					draw_graphics();
+					break;
+				case SDLK_LEFT:
+					famicom->controller_p1.left = true;
+					draw_graphics();
+					break;
+				case SDLK_RIGHT:
+					famicom->controller_p1.right = true;
+					draw_graphics();
 					break;
 				default:
 					break;
@@ -112,13 +132,15 @@ int main(int argc, char* argv[])
 			}
 		}
 		if (!pause) {
-			if (debug_file)
-				write_cpu_state(famicom->cpu, system, dfh);
-			famicom_step(famicom);
-		}
-		if (famicom->cycles % 1000 == 0 && !pause) {
+			//29780
+			for (int i=0; i<29780; i++) {
+				if (debug_file)
+					write_cpu_state(famicom->cpu, system, dfh);
+				famicom_step(famicom);
+			}
 			draw_graphics();
 		}
+		SDL_Delay(1000 / 60);
 	}
 	printf("stopping\n");
 	nemu_exit();
@@ -154,7 +176,8 @@ void draw_graphics ()
 	SDL_SetRenderDrawColor(graphics->renderer_debug, 0,0,0x80,0xFF);
 	SDL_RenderClear(graphics->renderer_debug);
 	if (famicom->chr_size != 0) {
-		draw_nametable(graphics, famicom, 0, 0);
+		draw_nametable(graphics, famicom, 0, 0, 0);
+		draw_nametable(graphics, famicom, 256, 0, 1);
 		draw_oam(graphics, famicom, palette);
 	}
 	if (strcmp(famicom->cpu->current_instruction_name, "")) {

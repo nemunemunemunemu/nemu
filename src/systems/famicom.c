@@ -41,6 +41,19 @@ Famicom* famicom_create ()
 	return famicom;
 }
 
+void famicom_reset_controller(Famicom* f)
+{
+	f->controller_p1.right = false;
+	f->controller_p1.left = false;
+	f->controller_p1.up = false;
+	f->controller_p1.down = false;
+	f->controller_p1.select = false;
+	f->controller_p1.start = false;
+	f->controller_p1.button_b = false;
+	f->controller_p1.button_a = false;
+}
+
+
 void famicom_reset (Famicom* famicom)
 {
 	const int memsize = 0x0800;
@@ -58,8 +71,10 @@ void famicom_reset (Famicom* famicom)
 	famicom->ppu->bg_pattern_table = false;
 	famicom->ppu->address = 0;
 	famicom->ppu->nametable_base = 0;
+	famicom_reset_controller(famicom);
 	cpu_reset(famicom->cpu, system);
 }
+
 
 void famicom_destroy (Famicom* famicom)
 {
@@ -135,9 +150,8 @@ enum ppu_mmapped_register {
 	PPUADDR,
 	PPUDATA,
 };
+
 const word OAMDMA = 0x4014;
-
-
 byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 {
 	 // zero page
@@ -239,13 +253,55 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 			}
 			return 0;
 		case 0x4016:
+			if (write) {
+				if (f->last_4016_write) {
+					f->poll_controller = true;
+					f->controller_bit = 0;
+				}
+				f->last_4016_write = value;
+				return 0;
+			} else {
+				if (f->poll_controller) {
+					bool button_stat;
+
+					switch (f->controller_bit) {
+					case joypad_right:
+						button_stat = f->controller_p1.right;
+						break;
+					case joypad_left:
+						button_stat = f->controller_p1.left;
+						break;
+					case joypad_down:
+						button_stat = f->controller_p1.down;
+						break;
+					case joypad_up:
+						button_stat = f->controller_p1.up;
+						break;
+					case joypad_start:
+						button_stat = f->controller_p1.start;
+						break;
+					case joypad_select:
+						button_stat = f->controller_p1.select;
+						break;
+					case joypad_b:
+						button_stat = f->controller_p1.button_b;
+						break;
+					case joypad_a:
+						button_stat = f->controller_p1.button_a;
+						break;
+					}
+					f->controller_bit++;
+					if (7 < f->controller_bit) {
+						f->poll_controller = false;
+						f->controller_bit = 0;
+						famicom_reset_controller(f);
+					}
+					return button_stat;
+				}
+				return 0;
+			}
 		case 0x4017:
-			if (write)
-				break;
-			byte controllerbits;
-			//controllerbits = set_bit(controllerbits, 4, true);
-			//controllerbits = set_bit(controllerbits, 5, true);
-			return controllerbits;
+			return 0;
 		default:
 			return 0;
 		}

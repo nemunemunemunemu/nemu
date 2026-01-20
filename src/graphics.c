@@ -8,12 +8,12 @@
 #include "systems/famicom.h"
 #include "graphics.h"
 #include "inprint/SDL2_inprint.h"
-
 const int window_width = 256;
 const int window_height = 256;
 
-const int debug_window_width = 257;
+const int debug_window_width = 256;
 const int debug_window_height = 256;
+
 
 SDL_Instance* init_graphics()
 {
@@ -135,6 +135,54 @@ void draw_debug(SDL_Instance* g, Famicom* f, int x, int y)
 	snprintf(ppustatus, sizeof(ppustatus), "%s  %0X        %0X", ppuctrl, f->ppu->address, f->ppu->oam_address);
 	inprint(g->renderer_debug, ppustatus, x, y+45);
 	inprint(g->renderer_debug, "PPUCTRL  PPUADDR  OAMADDR", x, y+54);
+
+	char* buttons[] = {
+		">",
+		"<",
+		"v",
+		"^",
+		"S",
+		"s",
+		"B",
+		"A"
+	};
+	for (int i=0; i<8; i++) {
+		switch (i) {
+		case joypad_right:
+			if (f->controller_p1.right)
+				inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
+			break;
+		case joypad_left:
+			if (f->controller_p1.left)
+				inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
+			break;
+		case joypad_down:
+			if (f->controller_p1.down)
+				inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
+			break;
+		case joypad_up:
+			if (f->controller_p1.up)
+				inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
+			break;
+		case joypad_start:
+			if (f->controller_p1.start)
+				inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
+			break;
+		case joypad_select:
+			if (f->controller_p1.select)
+				inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
+			break;
+		case joypad_b:
+			if (f->controller_p1.button_b)
+				inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
+			break;
+		case joypad_a:
+			if (f->controller_p1.button_a)
+				inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
+			break;
+		}
+
+	}
 }
 
 void draw_tile(SDL_Renderer* r, Famicom* f, int tile, int x_offset, int y_offset, bool mirrored, int table, SDL_Color palette[])
@@ -182,7 +230,7 @@ void draw_pattern_table(SDL_Instance* g, Famicom* f, int table, int x_offset, in
 	}
 }
 
-void draw_nametable(SDL_Instance* g, Famicom* f, int x, int y)
+void draw_nametable(SDL_Instance* g, Famicom* f, int x_offset, int y_offset, int table)
 {
 	SDL_Color palette[4];
 	palette[0].r = 0x00; palette[0].g = 0x00; palette[0].b = 0x00;
@@ -193,7 +241,7 @@ void draw_nametable(SDL_Instance* g, Famicom* f, int x, int y)
 	for (int y=0;y<30;y++) {
 		for (int x=0;x<32;x++) {
 			byte attr = f->ppu->attribute_table[0][8*(y/4)+(x/4)];
-			draw_tile(g->renderer, f, f->ppu->nametable[f->ppu->nametable_base][32*y+x]*16, (x*8), (y*8), false, f->ppu->bg_pattern_table, palette);
+			draw_tile(g->renderer, f, f->ppu->nametable[table][32*y+x]*16, (x*8)+x_offset, (y*8)+y_offset, false, f->ppu->bg_pattern_table, palette);
 		}
 	}
 	/*

@@ -37,7 +37,7 @@ void prepare_inline_font()
 	len = surface->h * surface->w / 8;
 
 	/* Copy */
-	for (i = 0; i < len; i++) 
+	for (i = 0; i < len; i++)
 	{
 		tmp = (Uint8)inline_font_bits[i];
 		for (j = 0; j < 8; j++)
