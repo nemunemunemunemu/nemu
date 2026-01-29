@@ -52,5 +52,3 @@ void famicom_destroy (Famicom* famicom);
 void famicom_step (Famicom* famicom);
 int  famicom_load_rom (Famicom* famicom, FILE* rom);
 byte mmap_famicom(Famicom* f, word addr, byte value, bool write);
-byte mmap_famicom_read ( Famicom* famicom, word addr );
-void mmap_famicom_write ( Famicom* famicom, word addr, byte value );

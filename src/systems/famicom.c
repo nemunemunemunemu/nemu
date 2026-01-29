@@ -10,13 +10,12 @@
 #include "../chips/6502.h"
 #include "famicom.h"
 
-const bool debug = true;
+const int memsize_famicom = 0x0800;
 
 Famicom* famicom_create ()
 {
-	const int memsize = 0x0800;
 	Famicom* famicom = malloc(sizeof(Famicom));
-	famicom->mem = malloc( sizeof(byte) * memsize );
+	famicom->mem = malloc( sizeof(byte) * memsize_famicom );
 	famicom->cpu = (Cpu_6502*) malloc(sizeof(Cpu_6502));
 	famicom->ppu = (Famicom_ppu*) malloc(sizeof(Famicom_ppu));
 	if (famicom->mem == NULL) {
@@ -56,13 +55,13 @@ void famicom_reset_controller(Famicom* f)
 
 void famicom_reset (Famicom* famicom)
 {
-	const int memsize = 0x0800;
 	System system; system.s = famicom_system; system.h = famicom;
-	memset( famicom->mem, 0, sizeof(byte) * memsize );
+	memset( famicom->mem, 0, sizeof(byte) * memsize_famicom );
 	memset( famicom->ppu->nametable, 0, sizeof(byte) * sizeof(famicom->ppu->nametable) );
 	memset( famicom->ppu->attribute_table, 0, sizeof(byte) * sizeof(famicom->ppu->attribute_table) );
 	memset( famicom->ppu->oam, 0, sizeof(byte) * sizeof(famicom->ppu->oam) );
-	famicom->ppu->vblank_flag = true;
+	memset( famicom->ppu->palettes, 0, sizeof(byte) * sizeof(famicom->ppu->palettes) );
+	famicom->ppu->vblank_flag = false;
 	famicom->ppu->nmi_enable = false;
 	famicom->ppu->write_latch = false;
 	famicom->ppu->vram_addr = 0;
@@ -152,6 +151,7 @@ enum ppu_mmapped_register {
 };
 
 const word OAMDMA = 0x4014;
+void oamdma(Famicom* f, byte value);
 byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 {
 	 // zero page
@@ -189,6 +189,7 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 			byte ppustatus = 0;
 			if (f->ppu->vblank_flag) {
 				ppustatus = set_bit(ppustatus, 0, true);
+				f->ppu->vblank_flag = false;
 			}
 			f->ppu->write_latch = false;
 			return ppustatus;
@@ -207,7 +208,7 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		case PPUADDR:
 			if (write) {
 				if (f->ppu->write_latch) {
-					f->ppu->address = bytes_to_word(f->ppu->vram_addr, value);
+					f->ppu->address = bytes_to_word(f->ppu->vram_addr, value) % 0x4000;
 				} else {
 					f->ppu->vram_addr = value;
 				}
@@ -225,7 +226,7 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 					f->ppu->nametable[1][address - 0x2400] = value;
 				} else if (0x27BF < address && address < 0x2800) {
 					f->ppu->attribute_table[1][address - 0x27C0] = value;
-				} else if (0x3F1F < address && address < 0x4000 ) {
+				} else if (0x3F00 < address && address < 0x3F20 ) {
 					f->ppu->palettes[address - 0x3F00] = value;
 				}
 				if (f->ppu->vram_increment) {
@@ -233,6 +234,7 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 				} else {
 					f->ppu->address += 1;
 				}
+				f->ppu->address = f->ppu->address % 0x4000;
 			}
 			return 0;
 		}
@@ -241,15 +243,7 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		switch (addr) {
 		case OAMDMA:
 			if (write) {
-				int i = bytes_to_word(value, 00);
-				for (int oam_i=0; oam_i<64; oam_i++) {
-					for (int ii=0; ii<4; ii++) {
-						f->ppu->oam[oam_i][ii] = f->mem[i+ii];
-
-					}
-					//printf("%X - %X %X %X %X\n",i, f->mem[i], f->mem[i+1], f->mem[i+2], f->mem[i+3]);
-					i += 4;
-				}
+				oamdma(f, value);
 			}
 			return 0;
 		case 0x4016:
@@ -263,7 +257,6 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 			} else {
 				if (f->poll_controller) {
 					bool button_stat;
-
 					switch (f->controller_bit) {
 					case joypad_right:
 						button_stat = f->controller_p1.right;
@@ -309,19 +302,25 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 	// cartridge
 	} else if (unmapped_addr_start < addr) {
 		if (0x7FFF < addr && addr <= 0xFFFF) {
-			if (write) {
-				printf("tried to write to cartridge space %0X - something went wrong\n", addr);
-				return 0;
-			} else {
-				if (f->prg_size == 32768) {
-					return f->prg[addr - (f->prg_size)];
-				} else {
-					return f->prg[addr - (f->prg_size*3)];
-				}
+			if (f->prg_size == 16384) {
+				return f->prg[(addr - 0xC000) % f->prg_size];
+			} else if (f->prg_size == 32768) {
+				return f->prg[(addr - 0x8000) % f->prg_size];
 			}
 		}
 	} else {
 		return 0;
+	}
+}
+
+void oamdma(Famicom* f, byte value)
+{
+	int i = bytes_to_word(value, 00);
+	for (int oam_i=0; oam_i<64; oam_i++) {
+		for (int ii=0; ii<4; ii++) {
+			f->ppu->oam[oam_i][ii] = mmap_famicom(f, i+ii, 0, false);
+		}
+		i += 4;
 	}
 }
 
@@ -334,8 +333,6 @@ void mmap_famicom_write(Famicom *famicom, word addr, byte value)
 {
 	mmap_famicom(famicom, addr, value, true);
 }
-
-bool branch_taken = false;
 
 void famicom_step(Famicom* famicom)
 {
@@ -368,9 +365,13 @@ void famicom_step(Famicom* famicom)
 	famicom->cpu->current_instruction = i;
 	step(system, famicom->cpu, i, oper);
 	famicom->cycles++;
+	if (famicom->cycles % 29780 == 0) {
+		famicom->ppu->vblank_flag = true;
+	}
 	if (famicom->ppu->vblank_flag && famicom->ppu->nmi_enable) {
 		nmi(system, famicom->cpu);
 		famicom->ppu->nmi_enable = false;
+		famicom->ppu->vblank_flag = false;
 		famicom->debug.nmi = true;
 	}
 }

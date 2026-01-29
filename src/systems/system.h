@@ -1,5 +1,6 @@
 enum systems {
 	famicom_system,
+	apple1_system,
 };
 
 typedef struct system {

@@ -87,6 +87,7 @@ typedef struct parsed_instruction {
 	enum addressing_mode a;
 	enum instruction_name n;
 	char* m;
+	byte o;
 } Instruction;
 
 typedef struct cpu_6502 {
