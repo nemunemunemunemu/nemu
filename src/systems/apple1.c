@@ -69,6 +69,7 @@ Apple1* apple1_create ()
 
 void apple1_destroy(Apple1* apple1)
 {
+	free(apple1->cpu);
 	free(apple1->mem);
 	free(apple1);
 }
