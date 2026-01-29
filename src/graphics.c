@@ -12,7 +12,7 @@ const int window_width = 256;
 const int window_height = 256;
 
 const int debug_window_width = 256;
-const int debug_window_height = 256;
+const int debug_window_height = 812;
 
 
 SDL_Instance* init_graphics()
@@ -38,7 +38,7 @@ SDL_Instance* init_graphics()
 		SDL_Quit();
 		return NULL;
 	}
-	instance->window_debug = SDL_CreateWindow("debug", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, debug_window_width, debug_window_height, 0);
+	instance->window_debug = SDL_CreateWindow("debug", 0,0, debug_window_width, debug_window_height, 0);
 	if (instance->window_debug == NULL) {
 		printf("unable to create window: %s\n", SDL_GetError());
 		SDL_Quit();
@@ -62,6 +62,7 @@ void graphics_destroy(SDL_Instance* graphics)
 	SDL_DestroyWindow(graphics->window_debug);
 	SDL_DestroyRenderer(graphics->renderer_debug);
 	free(graphics);
+	SDL_Quit();
 }
 
 // taken from https://emudev.de/nes-emulator/palettes-attribute-tables-and-sprites/.
@@ -86,6 +87,7 @@ void draw_debug(SDL_Instance* g, System system, Cpu_6502* cpu, int x, int y)
 	const int WHITE = 0xFFFFFF;
 	const int GREEN = 0x00FF00;
 	const int GREY = 0x666666;
+	const int YELLOW = 0xbbaa00;
 	incolor(WHITE, 0);
 	char romstatus[50];
 	Famicom* f;
@@ -211,12 +213,27 @@ void draw_debug(SDL_Instance* g, System system, Cpu_6502* cpu, int x, int y)
 		for (int i=0; i<0x16; i++) {
 			SDL_Color palette = palette_lookup(f, i);
 			SDL_SetRenderDrawColor(g->renderer_debug, palette.r, palette.g, palette.b, 0xFF);
-			SDL_RenderDrawPoint(g->renderer_debug, x + i, y + 67);
+			SDL_RenderDrawPoint(g->renderer_debug, x + i, y + 74);
+		}
+		incolor(YELLOW, 0);
+		inprint(g->renderer_debug, "0 1 2 3 4 5 6 7 8 9 A B C D E F", 0, y+247);
+		incolor(WHITE, 0);
+		char hex[3];
+		for (int ry=0; ry<0x50;ry++) {
+			for (int rx=0; rx<16; rx++) {
+				byte value = mmap_famicom(f, (16 * ry + rx), 0, false);
+				snprintf(hex, sizeof(hex), "%02x", value);
+				inprint(g->renderer_debug, hex, x+(rx*16), y+(ry*9)+256);
+			}
+		}
+		SDL_SetRenderDrawColor(g->renderer_debug, 0x00,0x00,0x00,0xFF);
+		for (int rx=0; rx<16; rx++) {
+			SDL_RenderDrawLine(g->renderer_debug, x+(rx*16)-1, y+247, x+(rx*16)-1, debug_window_height);
 		}
 	}
 }
 
-void draw_tile(SDL_Renderer* r, Famicom* f, int tile, int x_offset, int y_offset, bool mirrored, int table, SDL_Color palette[])
+void draw_tile(SDL_Renderer* r, Famicom* f, int tile, int x_offset, int y_offset, bool hflip, bool vflip, int table, SDL_Color palette[])
 {
 	word table_start;
 	if (table == 0) {
@@ -230,22 +247,22 @@ void draw_tile(SDL_Renderer* r, Famicom* f, int tile, int x_offset, int y_offset
 			byte plane2;
 			plane1 = f->chr[table_start + tile + y];
 			plane2 = f->chr[table_start + tile + y + 8];
-			if (!mirrored) {
+			if (!hflip) {
 				plane1 = reverse_byte_order(plane1);
 				plane2 = reverse_byte_order(plane2);
 			}
 			byte first_bit = get_bit(plane1, x);
 			byte second_bit = get_bit(plane2, x);
-			if (first_bit == 0 && second_bit == 0) {
-				SDL_SetRenderDrawColor(r, palette[0].r, palette[0].g, palette[0].b, 0xFF);
-			} else if (first_bit == 1 && second_bit == 0) {
-				SDL_SetRenderDrawColor(r, palette[1].r, palette[1].g, palette[1].b, 0xFF);
-			} else if (first_bit == 0 && second_bit == 1) {
-				SDL_SetRenderDrawColor(r, palette[2].r, palette[2].g, palette[2].b, 0xFF);
-			} else if (first_bit == 1 && second_bit == 1) {
-				SDL_SetRenderDrawColor(r, palette[3].r, palette[3].g, palette[3].b, 0xFF);
+			if (!(first_bit == 0 && second_bit == 0)) {
+				if (first_bit == 1 && second_bit == 0) {
+					SDL_SetRenderDrawColor(r, palette[1].r, palette[1].g, palette[1].b, 0xFF);
+				} else if (first_bit == 0 && second_bit == 1) {
+					SDL_SetRenderDrawColor(r, palette[2].r, palette[2].g, palette[2].b, 0xFF);
+				} else if (first_bit == 1 && second_bit == 1) {
+					SDL_SetRenderDrawColor(r, palette[3].r, palette[3].g, palette[3].b, 0xFF);
+				}
+				SDL_RenderDrawPoint(r, x + x_offset, y + y_offset);
 			}
-			SDL_RenderDrawPoint(r, x + x_offset, y + y_offset);
 		}
 	}
 }
@@ -255,7 +272,7 @@ void draw_tile(SDL_Renderer* r, Famicom* f, int tile, int x_offset, int y_offset
 void draw_pattern_table(SDL_Instance* g, Famicom* f, int table, int x_offset, int y_offset)
 {
 	SDL_Color palette[4];
-	palette[0] = palette_lookup(f,0);
+	palette[0].r = 0; palette[0].g = 0; palette[0].b = 0; palette[0].a = 0xFF;
 	palette[1] = palette_lookup(f,1);
 	palette[2] = palette_lookup(f,2);
 	palette[3] = palette_lookup(f,3);
@@ -263,7 +280,7 @@ void draw_pattern_table(SDL_Instance* g, Famicom* f, int table, int x_offset, in
 	int i = 0;
 	for (int y=0; y<16; y++) {
 		for (int x=0; x<16; x++) {
-			draw_tile(g->renderer_debug, f, i, (x*8)+x_offset, (y*8)+y_offset, false, table, palette);
+			draw_tile(g->renderer_debug, f, i, (x*8)+x_offset, (y*8)+y_offset, false, false, table, palette);
 			i = i + 16;
 		}
 	}
@@ -279,24 +296,24 @@ void draw_nametable(SDL_Instance* g, Famicom* f, int x_offset, int y_offset, int
 			byte bottomleft = (attr & 0x30)*4;
 			byte bottomright = (attr & 0xc0)*4;
 			byte quadrant;
-			if ((x % 3) < 2 && (y % 3) < 2) {
+			if ((x % 2) < 2 && (y % 2) < 2) {
 				quadrant = topleft;
 			}
-			if (2 < (x % 3) && (y % 3) < 2) {
+			if (2 <= (x % 2) && (y % 2) < 2) {
 				quadrant = topright;
 			}
-			if ((x % 3) < 2 && 2 < (y % 3)) {
+			if ((x % 2) < 2 && 2 <= (y % 2)) {
 				quadrant = bottomleft;
 			}
-			if (1 < (x % 3) && 2 < (y % 3) ) {
+			if (2 <= (x % 2) && 2 < (y % 2) ) {
 				quadrant = bottomright;
 			}
 			SDL_Color palette[4];
-			palette[0] = palette_lookup(f,quadrant);
+			palette[0].r = 0; palette[0].g = 0; palette[0].b = 0; palette[0].a = 0xFF;
 			palette[1] = palette_lookup(f,quadrant+1);
 			palette[2] = palette_lookup(f,quadrant+2);
 			palette[3] = palette_lookup(f,quadrant+3);
-			draw_tile(g->renderer, f, f->ppu->nametable[table][32*y+x]*16, (x*8)+x_offset, (y*8)+y_offset, false, f->ppu->bg_pattern_table, palette);
+			draw_tile(g->renderer, f, f->ppu->nametable[table][32*y+x]*16, (x*8)+x_offset, (y*8)+y_offset, false, false, f->ppu->bg_pattern_table, palette);
 		}
 	}
 }
@@ -304,6 +321,8 @@ void draw_nametable(SDL_Instance* g, Famicom* f, int x_offset, int y_offset, int
 void draw_oam(SDL_Instance* g, Famicom* f)
 {
 	for (int i=0; i<64; i++) {
+		byte hflip = (f->ppu->oam[i][2]&0x80);
+		byte vflip = (f->ppu->oam[i][2]&0x80);
 		byte sprite_palette = (f->ppu->oam[i][2]&0x03) + 0x10;
 		SDL_Color palette[4];
 		palette[0] = palette_lookup(f,sprite_palette);
@@ -313,7 +332,8 @@ void draw_oam(SDL_Instance* g, Famicom* f)
 		byte sprite_y = f->ppu->oam[i][0];
 		byte tile = f->ppu->oam[i][1]*16;
 		byte sprite_x = f->ppu->oam[i][3];
-		draw_tile(g->renderer, f, tile, sprite_x, sprite_y, false, f->ppu->sprite_pattern_table, palette);
+
+		draw_tile(g->renderer, f, tile, sprite_x, sprite_y, hflip, false, f->ppu->sprite_pattern_table, palette);
 	}
 }
 

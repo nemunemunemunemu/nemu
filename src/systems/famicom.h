@@ -38,7 +38,6 @@ typedef struct famicom {
 	byte* prg;
 	byte* chr;
 	byte oam[64][4];
-
 	Famicom_controller controller_p1;
 	Famicom_controller controller_p2;
 	bool last_4016_write;

@@ -147,7 +147,7 @@ void draw_graphics ()
 {
 	SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
 	SDL_RenderClear(graphics->renderer);
-	SDL_SetRenderDrawColor(graphics->renderer_debug, 0x30,0x50,0x25,0xFF);
+	SDL_SetRenderDrawColor(graphics->renderer_debug, 0x99,0x50,0x99,0xFF);
 	SDL_RenderClear(graphics->renderer_debug);
 
 	switch (selected_system.s) {
@@ -216,6 +216,8 @@ void apple1_loop()
 	}
 }
 
+const int famicom_cycles = 29780;
+
 void famicom_loop()
 {
 	bool pause = false;
@@ -267,13 +269,15 @@ void famicom_loop()
 			}
 		}
 		if (!pause) {
-			//29780
-			for (int i=0; i<29780; i++) {
-				if (famicom->cpu->running) {
-					famicom_step(famicom);
-					if (debug_file)
-						write_cpu_state(famicom->cpu, selected_system, dfh);
+			for (int i=0; i<famicom_cycles; i++) {
+				if (famicom->cycles % 30000 == 0) {
+					famicom->ppu->vblank_flag = true;
 				}
+				famicom_step(famicom);
+				if (!famicom->cpu->running)
+					break;
+				if (debug_file)
+					write_cpu_state(famicom->cpu, selected_system, dfh);
 			}
 			draw_graphics();
 		}

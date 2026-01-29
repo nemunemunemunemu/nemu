@@ -81,9 +81,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 	case immediate:
 		return oper[0];
         case relative:
-		if (!write)
-			return mem_read(system, cpu->pc + (int8_t)oper[0] );
-		return 0;
+		return mem_read(system, cpu->pc + (int8_t)oper[0] );
 	case accumulator:
 		if (write) {
 			set_reg(cpu, reg_a, value);
@@ -91,13 +89,15 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		} else {
 			return cpu->reg[reg_a];
 		}
+		break;
 	case zeropage:
 		if (write) {
-			mem_write(system, oper[0], value);
+			mem_write(system, addr_a, value);
 			return 0;
 		} else {
-			return mem_read(system, oper[0]);
+			return mem_read(system, addr_a);
 		}
+		break;
 	case absolute:
 		if (write) {
 			mem_write(system, addr_a, value);
@@ -105,14 +105,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		} else {
 			return mem_read(system, addr_a);
 		}
-	case absolute_indirect:
-		addr_f = bytes_to_word(mem_read(system,addr_a+1), mem_read(system,addr_a));
-		if (write) {
-			mem_write(system, addr_f, value);
-			return 0;
-		} else {
-			return mem_read(system, addr_f);
-		}
+		break;
 	case zeropage_x:
 		addr_f = oper[0] + cpu->reg[reg_x];
 		if (write) {
@@ -121,6 +114,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		} else {
 			return mem_read(system, addr_f);
 		}
+		break;
 	case zeropage_y:
 		addr_f = oper[0] + cpu->reg[reg_y];
 		if (write) {
@@ -129,6 +123,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		} else {
 			return mem_read(system, addr_f);
 		}
+		break;
 	case absolute_x:
 		addr_f = addr_a + cpu->reg[reg_x];
 		if (write) {
@@ -137,6 +132,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		} else {
 			return mem_read(system, addr_f);
 		}
+		break;
 	case absolute_y:
 		addr_f = addr_a + cpu->reg[reg_y];
 		if (write) {
@@ -145,6 +141,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		} else {
 			return mem_read(system, addr_f);
 		}
+		break;
 	case zeropage_xi:
 		addr_x = (oper[0] + cpu->reg[reg_x]) % 0xFF;
 		addr_f = bytes_to_word(mem_read(system, addr_x+1), mem_read(system, addr_x));
@@ -154,6 +151,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		} else {
 			return mem_read(system, addr_f);
 		}
+		break;
 	case zeropage_yi:
 		addr_f = bytes_to_word(mem_read(system, oper[0]+1), mem_read(system, oper[0])) + cpu->reg[reg_y];
 		if (write) {
@@ -162,6 +160,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		} else {
 			return mem_read(system, addr_f);
 		}
+		break;
 	default:
 		return 0;
 	}
@@ -169,12 +168,8 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 
 void update_p_nz ( Cpu_6502* cpu, byte value )
 {
-	set_p(cpu, negative, get_bit(value, 0) == 1);
-	if (value == 0) {
-		set_p(cpu, zero, true);
-	} else {
-		set_p(cpu, zero, false);
-	}
+	set_p(cpu, negative, value & 0x80);
+	set_p(cpu, zero, value == 0);
 }
 
 void update_p_c_cmp ( Cpu_6502* cpu, byte value_old, byte value )
@@ -258,21 +253,19 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		value = peek(system, cpu, a, oper);
 		set_p(cpu, carry, value & 0x80);
 		value <<= 1;
-		value &= 0xFF;
 		poke(system, cpu, a, oper, value);
 		update_p_nz(cpu, value);
 		break;
 
 	case compare_reg_mem:
-		value = peek(system, cpu, a, oper);
-		set_p(cpu, negative, get_bit(value, 0));
-		set_p(cpu, zero, cpu->reg[r] == value);
-		set_p(cpu, carry, cpu->reg[r] >= value);
+		value = cpu->reg[r] - peek(system, cpu, a, oper);
+		set_p(cpu, carry, cpu->reg[r] > value);
+		update_p_nz(cpu, value);
 		break;
 
 	case compare_bit:
 		value = peek(system, cpu, a, oper);
-		set_p(cpu, zero, (cpu->reg[reg_a] & value) == 0);
+		set_p(cpu, zero, (value & cpu->reg[reg_a]) == 0);
 		set_p(cpu, negative, get_bit(value, 0));
 		set_p(cpu, overflow, get_bit(value, 1));
 		break;
@@ -315,20 +308,20 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		break;
 
 	case and_a:
-		value = peek(system, cpu, a, oper);
-		set_reg(cpu, reg_a, value & cpu->reg[reg_a]);
+		value = peek(system, cpu, a, oper) & cpu->reg[reg_a];
+		set_reg(cpu, reg_a, value);
 		update_p_nz(cpu, value);
 		break;
 
 	case or_a:
-		value = peek(system, cpu, a, oper);
-		set_reg(cpu, reg_a, value | cpu->reg[reg_a]);
+		value = peek(system, cpu, a, oper) | cpu->reg[reg_a];
+		set_reg(cpu, reg_a, value);
 		update_p_nz(cpu, value);
 		break;
 
 	case xor_a:
-		value = peek(system, cpu, a, oper);
-		set_reg(cpu, reg_a, value ^ cpu->reg[reg_a]);
+		value = peek(system, cpu, a, oper) ^ cpu->reg[reg_a];
+		set_reg(cpu, reg_a, value);
 		update_p_nz(cpu, value);
 		break;
 
@@ -357,8 +350,8 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
         case branch:
 		if (a == absolute) {
 			addr = opera;
-		} else {
-			addr = peek(system, cpu, a, oper);
+		} else if (a == absolute_indirect) {
+			addr = bytes_to_word(mem_read(system,opera+1), mem_read(system,opera));
 		}
 		cpu->pc = addr;
 		cpu->branch_taken = true;
@@ -716,8 +709,7 @@ void clv ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 	instruction(system, cpu, clear_flag, 0, a, overflow, oper, "clv");
 }
 
-
-// transfer
+// transfer                      src             dst
 void tax ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 {
 	instruction(system, cpu, transfer_reg_a, reg_x, a, 0, oper, "tax");
@@ -943,6 +935,7 @@ void step(System system, Cpu_6502* cpu, Instruction i, byte oper[2])
 	case NOP:
 		nop(system, cpu, i.a, oper);
 		break;
+	default:
 	case unimplemented:
 		printf("Unimplemented opcode %X", i.n);
 		break;
