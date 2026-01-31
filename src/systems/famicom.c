@@ -94,9 +94,9 @@ int famicom_load_rom (Famicom* famicom, FILE* rom)
 		int chr_size = header[5] * 8192;
 		famicom->prg_size = prg_size;
 		famicom->chr_size = chr_size;
-		byte mapper_lo = (header[6] & 0x0F);
+		byte mapper_lo = (header[6] & 0xF0);
 		byte mapper_hi = (header[7] & 0xF0);
-		byte mapper = (mapper_hi << 4) | mapper_lo;
+		byte mapper = bytes_to_word(mapper_hi, mapper_lo);
 		famicom->debug.rom_mapper = mapper;
 		printf("NES rom, mapper: %d, \nprg size: %d, chr size: %d\n", mapper, prg_size, chr_size);
 		switch (mapper) {

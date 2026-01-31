@@ -95,7 +95,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		break;
 	case zeropage:
 		if (write) {
-			mem_write(system, addr_a, value);
+			mem_write(system, addr_a % 0x100, value);
 			return 0;
 		} else {
 			return mem_read(system, addr_a);
@@ -110,7 +110,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		}
 		break;
 	case zeropage_x:
-		addr_f = oper[0] + cpu->reg[reg_x];
+		addr_f = (oper[0] + cpu->reg[reg_x]) % 0x100;
 		if (write) {
 			mem_write(system, addr_f, value);
 			return 0;
@@ -119,7 +119,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		}
 		break;
 	case zeropage_y:
-		addr_f = oper[0] + cpu->reg[reg_y];
+		addr_f = (oper[0] + cpu->reg[reg_y]) % 0x100;
 		if (write) {
 			mem_write(system, addr_f, value);
 			return 0;
@@ -146,7 +146,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		}
 		break;
 	case zeropage_xi:
-		addr_x = (oper[0] + cpu->reg[reg_x]) % 0xFF;
+		addr_x = (oper[0] + cpu->reg[reg_x]) % 0x100;
 		addr_f = bytes_to_word(mem_read(system, addr_x+1), mem_read(system, addr_x));
 		if (write) {
 			mem_write(system, addr_f, value);
@@ -385,6 +385,15 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		cpu->branch_taken = true;
 		break;
 
+	case branch_brk:
+		addr = bytes_to_word(mem_read(system, 0xFFFF), mem_read(system, 0xFFFE));
+		push_stack(system, cpu, get_higher_byte(cpu->pc));
+	        push_stack(system, cpu, get_lower_byte(cpu->pc));
+		cpu->pc = addr;
+		cpu->branch_taken = true;
+		set_p(cpu, break_, true);
+		break;
+
 	case branch_conditional_flag:
 		addr = (int8_t)oper[0] + cpu->pc;
 		if (get_p(cpu, f) == 1)
@@ -479,7 +488,7 @@ void nop ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 
 void brk_ ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 {
-	instruction(system, cpu, no_op, 0, a, 0, oper, "brk");
+	instruction(system, cpu, branch_brk, 0, a, 0, oper, "brk");
 }
 
 // store

@@ -9,5 +9,5 @@ roms
 ~*
 *~
 \#*
-debug.log
-sst.log
+*.log
+logs

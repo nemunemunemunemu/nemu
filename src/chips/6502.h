@@ -27,6 +27,7 @@ enum operation {
 	branch_jsr,
 	branch_rts,
 	branch_rti,
+	branch_brk,
 	branch_conditional_flag,
 	branch_conditional_flag_clear,
 	compare_reg_mem,

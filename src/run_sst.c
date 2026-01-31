@@ -17,8 +17,17 @@ int main(int argc, char* argv[])
 	if (argc < 3) {
 		return 1;
 	}
-	dfh = fopen("debug.log", "w");
-	dfh2 = fopen("sst.log", "w");
+	char logfilename[255];
+	snprintf(logfilename, sizeof(logfilename), "logs/%02X.log", atoi(argv[2]));
+	char debuglogfilename[255];
+	snprintf(debuglogfilename, sizeof(logfilename), "logs/debug-%02X.log", atoi(argv[2]));
+
+	dfh = fopen(debuglogfilename, "w");
+	dfh2 = fopen(logfilename, "w");
+	if (dfh == NULL || dfh2 == NULL) {
+		printf("error opening logs\n");
+		return 1;
+	}
 	run_test(atoi(argv[2]), argv[1]);
 	fclose(dfh);
 	fclose(dfh2);
@@ -27,6 +36,11 @@ int main(int argc, char* argv[])
 
 int run_test(int opcode, char* path)
 {
+	Instruction ins = parse(opcode);
+	if (ins.n == unimplemented) {
+		printf("unimplemented opcode, skipping\n");
+		return 0;
+	}
 	char filename[255];
 	snprintf(filename, sizeof(filename), "%s/%02x.json", path, opcode);
 	FILE* f = fopen(filename, "r");
@@ -79,7 +93,7 @@ int run_test(int opcode, char* path)
 		test_initial = cJSON_GetObjectItem(test_item, "initial");
 		test_final = cJSON_GetObjectItem(test_item, "final");
 		test_ram_pokes = cJSON_GetObjectItem(test_initial, "ram");
-		fprintf(dfh2, "running test '%s' (%d/%d)\n", test_name->valuestring, i, tests_amount);
+		fprintf(dfh2, "running test '%s' (%d/%d)\n", test_name->valuestring, i+1, tests_amount);
 		fprintf(dfh, "=========== %s ===========\n", test_name->valuestring);
 		pc_initial = cJSON_GetObjectItem(test_initial, "pc");
 		a_initial = cJSON_GetObjectItem(test_initial, "a");
@@ -112,9 +126,10 @@ int run_test(int opcode, char* path)
 			addr = (word)ram_addr->valuedouble;
 			value = (byte)ram_value->valueint;
 			mmap_sst(sst, addr, value, true);
+			fprintf(dfh, "%X->%X\n", addr, value);
 		}
 		write_cpu_state(sst->cpu, s, dfh);
-		Instruction ins = parse(opcode);
+		ins = parse(opcode);
 		byte oper[2] = {
 			mmap_sst(sst, sst->cpu->pc+1, 0, false),
 			mmap_sst(sst, sst->cpu->pc+2, 0, false),
