@@ -270,7 +270,7 @@ void famicom_loop()
 		}
 		if (!pause) {
 			for (int i=0; i<famicom_cycles; i++) {
-				if (famicom->cycles % 30000 == 0) {
+				if (famicom->cycles % 20000 == 0) {
 					famicom->ppu->vblank_flag = true;
 				}
 				famicom_step(famicom);

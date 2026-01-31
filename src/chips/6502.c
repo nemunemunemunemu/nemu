@@ -10,6 +10,7 @@
 #include "6502.h"
 #include "../systems/famicom.h"
 #include "../systems/apple1.h"
+#include "../systems/sst.h"
 
 void set_p ( Cpu_6502* cpu, enum flag f, bool value )
 {
@@ -34,6 +35,8 @@ byte mmap_6502 (System system, word addr, byte value, bool write)
 		return mmap_famicom(system.h, addr, value, write);
 	case apple1_system:
 		return mmap_apple1(system.h, addr, value, write);
+	case sst_system:
+		return mmap_sst(system.h, addr, value, write);
 	default:
 		return 0;
 	}
@@ -227,7 +230,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 	case shift_rol:
 		value = peek(system, cpu, a, oper);
-		set_p(cpu, carry, get_bit(value, 0));
+		set_p(cpu, carry, value & 0x80);
 		value = (value << 1) + get_p(cpu, carry);
 		poke(system, cpu, a, oper, value);
 		update_p_nz(cpu, value);
@@ -235,7 +238,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 	case shift_ror:
 		value = peek(system, cpu, a, oper);
-		set_p(cpu, carry, get_bit(value, 7));
+		set_p(cpu, carry, value & 0x01);
 		value = (value >> 1) + get_p(cpu, carry);
 		poke(system, cpu, a, oper, value);
 		update_p_nz(cpu, value);
@@ -1335,7 +1338,7 @@ void write_cpu_state (Cpu_6502* cpu, System system, FILE* f)
 		break;
 	}
 	byte oper[] = {oper1, oper2};
-	fprintf(f, "\n%X %s %s  -  ", i.o, i.m, addr_mode);
+	fprintf(f, "%X %s %s  -  ", i.o, i.m, addr_mode);
 
 	char* reg_names[] = {
 		"A",

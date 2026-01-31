@@ -94,9 +94,9 @@ int famicom_load_rom (Famicom* famicom, FILE* rom)
 		int chr_size = header[5] * 8192;
 		famicom->prg_size = prg_size;
 		famicom->chr_size = chr_size;
-		byte mapper_lo = (byte)(header[6] & 0x0F);
-		byte mapper_hi = (byte)((header[7] & 0xF0) >> 4);
-		byte mapper = (byte)((mapper_hi << 4) | mapper_lo);
+		byte mapper_lo = (header[6] & 0x0F);
+		byte mapper_hi = (header[7] & 0xF0);
+		byte mapper = (mapper_hi << 4) | mapper_lo;
 		famicom->debug.rom_mapper = mapper;
 		printf("NES rom, mapper: %d, \nprg size: %d, chr size: %d\n", mapper, prg_size, chr_size);
 		switch (mapper) {
@@ -171,7 +171,7 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 				f->ppu->vram_increment = get_bit(value, 2);
 				f->ppu->sprite_pattern_table = get_bit(value, 3);
 				f->ppu->bg_pattern_table = get_bit(value, 4);
-				f->ppu->nmi_enable = get_bit(value, 7);
+				f->ppu->nmi_enable = value & 0x80;
 				f->ppu->nametable_base = value & 0x03;
 				return 0;
 			}
@@ -338,7 +338,6 @@ void famicom_step(Famicom* famicom)
 	}
 	byte oper1 = mmap_famicom_read(famicom, famicom->cpu->pc + 1);
 	byte oper2 = 0;
-	word opera = 0;
 	switch (i.a) {
 	default:
 		break;
@@ -347,7 +346,6 @@ void famicom_step(Famicom* famicom)
 	case absolute_x:
 	case absolute_y:
 		oper2 = mmap_famicom_read(famicom, famicom->cpu->pc + 2);
-		opera = bytes_to_word(oper2, oper1);
 		break;
 	}
 	byte oper[2] = {oper1, oper2};

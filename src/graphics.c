@@ -9,7 +9,7 @@
 #include "graphics.h"
 #include "inprint/SDL2_inprint.h"
 const int window_width = 256;
-const int window_height = 256;
+const int window_height = 264;
 
 const int debug_window_width = 256;
 const int debug_window_height = 812;
@@ -261,7 +261,11 @@ void draw_tile(SDL_Renderer* r, Famicom* f, int tile, int x_offset, int y_offset
 				} else if (first_bit == 1 && second_bit == 1) {
 					SDL_SetRenderDrawColor(r, palette[3].r, palette[3].g, palette[3].b, 0xFF);
 				}
-				SDL_RenderDrawPoint(r, x + x_offset, y + y_offset);
+				if (vflip) {
+					SDL_RenderDrawPoint(r, y + x_offset, x + y_offset);
+				} else {
+					SDL_RenderDrawPoint(r, x + x_offset, y + y_offset);
+				}
 			}
 		}
 	}
@@ -322,7 +326,7 @@ void draw_oam(SDL_Instance* g, Famicom* f)
 {
 	for (int i=0; i<64; i++) {
 		byte hflip = (f->ppu->oam[i][2]&0x80);
-		byte vflip = (f->ppu->oam[i][2]&0x80);
+		byte vflip = (f->ppu->oam[i][2]&0x40);
 		byte sprite_palette = (f->ppu->oam[i][2]&0x03) + 0x10;
 		SDL_Color palette[4];
 		palette[0] = palette_lookup(f,sprite_palette);
@@ -332,8 +336,7 @@ void draw_oam(SDL_Instance* g, Famicom* f)
 		byte sprite_y = f->ppu->oam[i][0];
 		byte tile = f->ppu->oam[i][1]*16;
 		byte sprite_x = f->ppu->oam[i][3];
-
-		draw_tile(g->renderer, f, tile, sprite_x, sprite_y, hflip, false, f->ppu->sprite_pattern_table, palette);
+		draw_tile(g->renderer, f, tile, sprite_x, sprite_y, hflip, vflip, f->ppu->sprite_pattern_table, palette);
 	}
 }
 
