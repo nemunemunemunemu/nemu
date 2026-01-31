@@ -1,5 +1,6 @@
 #!/bin/sh
+rm -f logs/*
 for var in $( seq 0 255 )
 do
-    bin/run_sst "$1" $var
+    bin/run_sst $1 $var
 done

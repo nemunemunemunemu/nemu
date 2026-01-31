@@ -24,7 +24,11 @@ int main(int argc, char* argv[])
 
 	dfh = fopen(debuglogfilename, "w");
 	dfh2 = fopen(logfilename, "w");
-	if (dfh == NULL || dfh2 == NULL) {
+	if (dfh == NULL) {
+		printf("error opening logs\n");
+		return 1;
+	}
+	if (dfh2 == NULL) {
 		printf("error opening logs\n");
 		return 1;
 	}
@@ -87,13 +91,13 @@ int run_test(int opcode, char* path)
 	cJSON* sp_final;
 	cJSON* test_ram_pokes;
 	cJSON* test_ram_pokes_amount;
-	for (int i; i<tests_amount; i++) {
-		test_item = cJSON_GetArrayItem(test_json, i);
+	for (int ti=0; ti<tests_amount; ti++) {
+		test_item = cJSON_GetArrayItem(test_json, ti);
 		test_name = cJSON_GetObjectItem(test_item, "name");
 		test_initial = cJSON_GetObjectItem(test_item, "initial");
 		test_final = cJSON_GetObjectItem(test_item, "final");
 		test_ram_pokes = cJSON_GetObjectItem(test_initial, "ram");
-		fprintf(dfh2, "running test '%s' (%d/%d)\n", test_name->valuestring, i+1, tests_amount);
+		fprintf(dfh2, "running test '%s' (%d/%d)\n", test_name->valuestring, ti+1, tests_amount);
 		fprintf(dfh, "=========== %s ===========\n", test_name->valuestring);
 		pc_initial = cJSON_GetObjectItem(test_initial, "pc");
 		a_initial = cJSON_GetObjectItem(test_initial, "a");
