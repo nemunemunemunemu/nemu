@@ -12,7 +12,7 @@ nemu: ${OBJ}
 	${CC} -o bin/$@ bin/*.o ${LDFLAGS}
 
 run_sst:
-	${CC} -O3 src/bitmath.c src/chips/6502.c src/systems/sst.c src/cjson/cJSON.c src/run_sst.c -o bin/run_sst
+	${CC} -O3 src/bitmath.c src/chips/6502.c src/systems/*.c src/cjson/cJSON.c src/run_sst.c -o bin/run_sst
 
 .PHONY: clean
 clean:
