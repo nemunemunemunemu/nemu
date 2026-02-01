@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <signal.h>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_mixer.h>
 #include "types.h"
 #include "systems/system.h"
 
@@ -78,7 +79,7 @@ int main(int argc, char* argv[])
 		}
 		selected_system.h = famicom;
 		famicom->debug.rom_name = argv[1];
-		famicom_reset(famicom);
+		famicom_reset(famicom, false);
 		break;
 	case apple1_system:
 		apple1 = apple1_create();
@@ -233,46 +234,78 @@ void famicom_loop()
 				case SDLK_ESCAPE:
 					famicom->cpu->running = false;
 					break;
+					/*
 				case SDLK_SPACE:
 					pause = !pause;
 					break;
 				case SDLK_LCTRL:
 					famicom_step(famicom);
 					draw_graphics();
-					break;
+					break;*/
+				case SDLK_F1:
+					famicom_reset(famicom, true);
+					famicom_step(famicom);
+					draw_graphics();
 				case SDLK_F2:
-					famicom_reset(famicom);
+					famicom_reset(famicom, false);
 					famicom_step(famicom);
 					draw_graphics();
 					break;
 				case SDLK_RETURN:
 					famicom->controller_p1.start = true;
-					draw_graphics();
+					break;
+				case SDLK_RSHIFT:
+					famicom->controller_p1.select = true;
+					break;
+				case SDLK_LCTRL:
+					famicom->controller_p1.button_b = true;
+					break;
+				case SDLK_LALT:
+					famicom->controller_p1.button_a = true;
 					break;
 				case SDLK_UP:
 					famicom->controller_p1.up = true;
-					draw_graphics();
 					break;
 				case SDLK_DOWN:
 					famicom->controller_p1.down = true;
-					draw_graphics();
 					break;
 				case SDLK_LEFT:
 					famicom->controller_p1.left = true;
-					draw_graphics();
 					break;
 				case SDLK_RIGHT:
 					famicom->controller_p1.right = true;
-					draw_graphics();
 					break;
 				}
+				break;
+			case SDL_KEYUP:
+				switch (e.key.keysym.sym) {
+				case SDLK_RETURN:
+					famicom->controller_p1.start = false;
+					break;
+				case SDLK_LCTRL:
+					famicom->controller_p1.button_b = false;
+					break;
+				case SDLK_LALT:
+					famicom->controller_p1.button_a = false;
+					break;
+				case SDLK_UP:
+					famicom->controller_p1.up = false;
+					break;
+				case SDLK_DOWN:
+					famicom->controller_p1.down = false;
+					break;
+				case SDLK_LEFT:
+					famicom->controller_p1.left = false;
+					break;
+				case SDLK_RIGHT:
+					famicom->controller_p1.right = false;
+					break;
+				}
+				break;
 			}
 		}
 		if (!pause) {
 			for (int i=0; i<famicom_cycles; i++) {
-				if (famicom->cycles % 20000 == 0) {
-					famicom->ppu->vblank_flag = true;
-				}
 				famicom_step(famicom);
 				if (!famicom->cpu->running)
 					break;

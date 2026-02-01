@@ -53,19 +53,22 @@ void famicom_reset_controller(Famicom* f)
 }
 
 
-void famicom_reset (Famicom* famicom)
+void famicom_reset (Famicom* famicom, bool warm)
 {
 	System system; system.s = famicom_system; system.h = famicom;
-	memset( famicom->mem, 0, sizeof(byte) * memsize_famicom );
-	memset( famicom->ppu->nametable, 0, sizeof(byte) * sizeof(famicom->ppu->nametable) );
-	memset( famicom->ppu->attribute_table, 0, sizeof(byte) * sizeof(famicom->ppu->attribute_table) );
-	memset( famicom->ppu->oam, 0, sizeof(byte) * sizeof(famicom->ppu->oam) );
-	memset( famicom->ppu->palettes, 0, sizeof(byte) * sizeof(famicom->ppu->palettes) );
+	if (!warm) {
+		memset( famicom->mem, 0, sizeof(byte) * memsize_famicom );
+		memset( famicom->ppu->nametable, 0, sizeof(byte) * sizeof(famicom->ppu->nametable) );
+		memset( famicom->ppu->attribute_table, 0, sizeof(byte) * sizeof(famicom->ppu->attribute_table) );
+		memset( famicom->ppu->oam, 0, sizeof(byte) * sizeof(famicom->ppu->oam) );
+		memset( famicom->ppu->palettes, 0, sizeof(byte) * sizeof(famicom->ppu->palettes) );
+	}
+	famicom->cycles = 0;
 	famicom->ppu->vblank_flag = false;
 	famicom->ppu->nmi_enable = false;
 	famicom->ppu->write_latch = false;
 	famicom->ppu->vram_addr = 0;
-	famicom->ppu->vram_increment=false;
+	famicom->ppu->vram_increment =false;
 	famicom->ppu->sprite_pattern_table = false;
 	famicom->ppu->bg_pattern_table = false;
 	famicom->ppu->address = 0;
@@ -203,8 +206,8 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 				} else {
 					f->ppu->vram_addr = value;
 				}
-				f->ppu->write_latch = !f->ppu->write_latch;
 			}
+			f->ppu->write_latch = !f->ppu->write_latch;
 			return 0;
 		case PPUDATA:
 			if (write) {
@@ -278,7 +281,6 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 					if (7 < f->controller_bit) {
 						f->poll_controller = false;
 						f->controller_bit = 0;
-						famicom_reset_controller(f);
 					}
 					return button_stat;
 				}
@@ -293,10 +295,12 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 	// cartridge
 	} else if (unmapped_addr_start < addr) {
 		if (0x7FFF < addr && addr <= 0xFFFF) {
+			if (write)
+				return 0;
 			if (f->prg_size == 16384) {
-				return f->prg[(addr - 0xC000)];
+				return f->prg[(addr - 0xC000) % f->prg_size];
 			} else if (f->prg_size == 32768) {
-				return f->prg[(addr - 0x8000)];
+				return f->prg[(addr - 0x8000) % f->prg_size];
 			}
 		}
 	} else {
@@ -354,6 +358,11 @@ void famicom_step(Famicom* famicom)
 	famicom->cpu->current_instruction = i;
 	step(system, famicom->cpu, i, oper);
 	famicom->cycles++;
+	if ((famicom->cycles % 15273) == 0) {
+		famicom->ppu->vblank_flag = true;
+	} else {
+		famicom->ppu->vblank_flag = false;
+	}
 	if (famicom->ppu->vblank_flag && famicom->ppu->nmi_enable) {
 		nmi(system, famicom->cpu);
 		famicom->ppu->nmi_enable = false;

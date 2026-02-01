@@ -3,12 +3,14 @@
 #include <stdlib.h>
 #include "cjson/cJSON.h"
 #include "types.h"
+
 #include "systems/system.h"
 #include "chips/6502.h"
 #include "systems/sst.h"
 
 FILE* dfh;
-FILE* dfh2;
+
+
 
 int run_test(int opcode, char* path);
 
@@ -19,22 +21,13 @@ int main(int argc, char* argv[])
 	}
 	char logfilename[255];
 	snprintf(logfilename, sizeof(logfilename), "logs/%02X.log", atoi(argv[2]));
-	char debuglogfilename[255];
-	snprintf(debuglogfilename, sizeof(logfilename), "logs/debug-%02X.log", atoi(argv[2]));
-
-	dfh = fopen(debuglogfilename, "w");
-	dfh2 = fopen(logfilename, "w");
+	dfh = fopen(logfilename, "w");
 	if (dfh == NULL) {
-		printf("error opening logs\n");
-		return 1;
-	}
-	if (dfh2 == NULL) {
 		printf("error opening logs\n");
 		return 1;
 	}
 	run_test(atoi(argv[2]), argv[1]);
 	fclose(dfh);
-	fclose(dfh2);
 	return 0;
 }
 
@@ -42,7 +35,6 @@ int run_test(int opcode, char* path)
 {
 	Instruction ins = parse(opcode);
 	if (ins.n == unimplemented) {
-		printf("unimplemented opcode, skipping\n");
 		return 0;
 	}
 	char filename[255];
@@ -91,14 +83,15 @@ int run_test(int opcode, char* path)
 	cJSON* sp_final;
 	cJSON* test_ram_pokes;
 	cJSON* test_ram_pokes_amount;
+	int tests_passed;
+	int tests_failed;
 	for (int ti=0; ti<tests_amount; ti++) {
 		test_item = cJSON_GetArrayItem(test_json, ti);
 		test_name = cJSON_GetObjectItem(test_item, "name");
 		test_initial = cJSON_GetObjectItem(test_item, "initial");
 		test_final = cJSON_GetObjectItem(test_item, "final");
 		test_ram_pokes = cJSON_GetObjectItem(test_initial, "ram");
-		fprintf(dfh2, "running test '%s' (%d/%d)\n", test_name->valuestring, ti+1, tests_amount);
-		fprintf(dfh, "=========== %s ===========\n", test_name->valuestring);
+		fprintf(dfh, "running test '%s' (%d/%d)\n", test_name->valuestring, ti+1, tests_amount);
 		pc_initial = cJSON_GetObjectItem(test_initial, "pc");
 		a_initial = cJSON_GetObjectItem(test_initial, "a");
 		x_initial = cJSON_GetObjectItem(test_initial, "x");
@@ -141,6 +134,7 @@ int run_test(int opcode, char* path)
 		step(s, sst->cpu, ins, oper);
 		write_cpu_state(sst->cpu, s, dfh);
 		cJSON* ram_final = cJSON_GetObjectItem(test_final, "ram");
+		int score = 10;
 		for (int ri2=0; ri2<cJSON_GetArraySize(ram_final); ri2++) {
 			cJSON* ram_peek = cJSON_GetArrayItem(ram_final, ri2);
 			cJSON* ram_addr;
@@ -151,9 +145,10 @@ int run_test(int opcode, char* path)
 			byte value = mmap_sst(sst, addr, 0, false);
 			byte expected_value = (byte)ram_value->valueint;
 			if ( value != expected_value ) {
-				fprintf(dfh2, "%X doesn't match expected %X (%X)\n", addr, expected_value, value);
+				fprintf(dfh, "%X doesn't match expected %X (%X)\n", addr, expected_value, value);
+				score--;
 			} else {
-				fprintf(dfh2, "%X matches expected %X\n", addr, expected_value);
+				fprintf(dfh, "%X matches expected %X\n", addr, expected_value);
 			}
 		}
 		for (int ri3=0; ri3<6; ri3++) {
@@ -192,13 +187,24 @@ int run_test(int opcode, char* path)
 				break;
 			}
 			if (actual != expected) {
-				fprintf(dfh2, "%s is not expected value %X (%X)\n", reg, expected, actual);
+				fprintf(dfh, "%s is not expected value %X (%X)\n", reg, expected, actual);
+				score--;
 			} else {
-				fprintf(dfh2, "%s is expected value %X\n", reg, expected);
+				fprintf(dfh, "%s is expected value %X\n", reg, expected);
 			}
 		}
-		fprintf(dfh2, "=====================\n");
+		if (score < 10) {
+			fprintf(dfh, "FAIL, score: %d\n", score);
+			tests_failed++;
+		} else {
+			fprintf(dfh, "PASS, score: %d\n", score);
+			tests_passed++;
+		}
+		fprintf(dfh, "=====================\n");
 	}
+	printf("tests failed: %d/%d\n", tests_failed, tests_amount);
+	printf("tests passed: %d/%d\n", tests_passed, tests_amount);
+	printf("=====================\n");
 	cJSON_Delete(test_json);
 	free(sst->cpu);
 	free(sst);

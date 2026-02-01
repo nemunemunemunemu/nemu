@@ -8,6 +8,8 @@ roms
 *.nes
 ~*
 *~
+.\#*
 \#*
 *.log
 logs
+tests

@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_mixer.h>
 #include <stdlib.h>
 #include "types.h"
 #include "bitmath.h"
@@ -22,8 +23,8 @@ SDL_Instance* init_graphics()
 	if (instance == NULL) {
 		return NULL;
 	}
-	if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-		printf("unable to start SDL: %s\n", SDL_GetError());
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+		printf( "sdl error: %s\n", SDL_GetError() );
 		return NULL;
 	}
 	instance->window = SDL_CreateWindow("nemu", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, window_width, window_height, 0);
@@ -164,52 +165,7 @@ void draw_debug(SDL_Instance* g, System system, Cpu_6502* cpu, int x, int y)
 		inprint(g->renderer_debug, ppustatus, x, y+45);
 		inprint(g->renderer_debug, "PPUCTRL  PPUADDR  OAMADDR", x, y+54);
 
-		char* buttons[] = {
-			">",
-			"<",
-			"v",
-			"^",
-			"S",
-			"s",
-			"B",
-			"A"
-		};
-		for (int i=0; i<8; i++) {
-			switch (i) {
-			case joypad_right:
-				if (f->controller_p1.right)
-					inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
-				break;
-			case joypad_left:
-				if (f->controller_p1.left)
-					inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
-				break;
-			case joypad_down:
-				if (f->controller_p1.down)
-					inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
-				break;
-			case joypad_up:
-				if (f->controller_p1.up)
-					inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
-				break;
-			case joypad_start:
-				if (f->controller_p1.start)
-					inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
-				break;
-			case joypad_select:
-				if (f->controller_p1.select)
-					inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
-				break;
-			case joypad_b:
-				if (f->controller_p1.button_b)
-					inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
-				break;
-			case joypad_a:
-				if (f->controller_p1.button_a)
-					inprint(g->renderer_debug, buttons[i], x+(i*9), y+63);
-				break;
-			}
-		}
+
 		for (int i=0; i<0x16; i++) {
 			SDL_Color palette = palette_lookup(f, i);
 			SDL_SetRenderDrawColor(g->renderer_debug, palette.r, palette.g, palette.b, 0xFF);

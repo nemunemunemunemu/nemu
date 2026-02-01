@@ -6,14 +6,14 @@ typedef struct famicom_debug {
 } Famicom_debug;
 
 enum famicom_joypad_buttons {
-	joypad_right,
-	joypad_left,
-	joypad_down,
-	joypad_up,
-	joypad_start,
-	joypad_select,
-	joypad_b,
 	joypad_a,
+	joypad_b,
+	joypad_select,
+	joypad_start,
+	joypad_up,
+	joypad_down,
+	joypad_left,
+	joypad_right,
 };
 
 typedef struct famicom_controller {
@@ -46,7 +46,7 @@ typedef struct famicom {
 } Famicom;
 
 Famicom* famicom_create ();
-void famicom_reset (Famicom* famicom);
+void famicom_reset (Famicom* famicom, bool warm);
 void famicom_destroy (Famicom* famicom);
 void famicom_step (Famicom* famicom);
 int  famicom_load_rom (Famicom* famicom, FILE* rom);
