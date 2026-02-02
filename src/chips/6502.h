@@ -102,7 +102,6 @@ typedef struct cpu_6502 {
 } Cpu_6502;
 
 void write_cpu_state (Cpu_6502* cpu, System system, FILE* f);
-void print_addressing_mode(enum addressing_mode a);
 Instruction parse(byte opcode);
 
 void cpu_reset(Cpu_6502* cpu, System system);

@@ -154,7 +154,7 @@ void draw_graphics ()
 	switch (selected_system.s) {
 	case famicom_system:
 		if (famicom->chr_size != 0) {
-			draw_nametable(graphics, famicom, 0, 0, 0);
+			draw_nametable(graphics, famicom, famicom->ppu->scroll_x, famicom->ppu->scroll_y, 0);
 			draw_oam(graphics, famicom);
 		}
 		if (famicom->cpu->current_instruction_name) {

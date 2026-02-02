@@ -13,4 +13,6 @@ typedef struct ppu {
 	byte oam[64][4];
 	byte oam_address;
 	byte palettes[0x20];
+	int scroll_x;
+	int scroll_y;
 } Famicom_ppu;

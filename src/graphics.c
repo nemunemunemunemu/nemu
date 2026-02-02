@@ -9,12 +9,14 @@
 #include "systems/famicom.h"
 #include "graphics.h"
 #include "inprint/SDL2_inprint.h"
+
 const int window_width = 256;
 const int window_height = 264;
 
 const int debug_window_width = 256;
 const int debug_window_height = 812;
 
+const int window_scale = 2;
 
 SDL_Instance* init_graphics()
 {
@@ -53,6 +55,10 @@ SDL_Instance* init_graphics()
 	}
 	inrenderer(instance->renderer_debug);
 	prepare_inline_font();
+	if (window_scale != 1) {
+		SDL_SetWindowSize(instance->window, window_width * window_scale, window_height * window_scale);
+		SDL_RenderSetLogicalSize(instance->renderer, window_width, window_height);
+	}
 	return instance;
 }
 
@@ -161,7 +167,7 @@ void draw_debug(SDL_Instance* g, System system, Cpu_6502* cpu, int x, int y)
 		char ppuctrl[50];
 		snprintf(ppuctrl, sizeof(ppuctrl), "%X00%X%X%X%X",
 		    f->ppu->nmi_enable, f->ppu->bg_pattern_table, f->ppu->sprite_pattern_table, f->ppu->vram_increment, f->ppu->nametable_base);
-		snprintf(ppustatus, sizeof(ppustatus), "%s  %0X        %0X", ppuctrl, f->ppu->address, f->ppu->oam_address);
+		snprintf(ppustatus, sizeof(ppustatus), "%s  %0X     %0X", ppuctrl, f->ppu->address, f->ppu->oam_address);
 		inprint(g->renderer_debug, ppustatus, x, y+45);
 		inprint(g->renderer_debug, "PPUCTRL  PPUADDR  OAMADDR", x, y+54);
 
@@ -248,24 +254,25 @@ void draw_pattern_table(SDL_Instance* g, Famicom* f, int table, int x_offset, in
 
 void draw_nametable(SDL_Instance* g, Famicom* f, int x_offset, int y_offset, int table)
 {
-	for (int y=0;y<30;y++) {
-		for (int x=0;x<32;x++) {
+	for (byte y=0;y<30;y++) {
+		for (byte x=0;x<32;x++) {
 			byte attr = f->ppu->attribute_table[0][8 * (y/4) + (x/4)];
 			byte topleft = (attr & 0x03)*4;
 			byte topright = (attr & 0x0c)*4;
 			byte bottomleft = (attr & 0x30)*4;
 			byte bottomright = (attr & 0xc0)*4;
 			byte quadrant;
-			if ((x % 2) < 2 && (y % 2) < 2) {
+			const int width = 2;
+			if ((x % width) <= 2 && (y % width) <= 2) {
 				quadrant = topleft;
 			}
-			if (2 <= (x % 2) && (y % 2) < 2) {
+			if (2 <= (x % width) && (y % width) <= 2) {
 				quadrant = topright;
 			}
-			if ((x % 2) < 2 && 2 <= (y % 2)) {
+			if ((x % width) <= 2 && 2 <= (y % width)) {
 				quadrant = bottomleft;
 			}
-			if (2 <= (x % 2) && 2 < (y % 2) ) {
+			if (2 <= (x % width) && 2 <= (y % width) ) {
 				quadrant = bottomright;
 			}
 			SDL_Color palette[4];
@@ -273,7 +280,7 @@ void draw_nametable(SDL_Instance* g, Famicom* f, int x_offset, int y_offset, int
 			palette[1] = palette_lookup(f,quadrant+1);
 			palette[2] = palette_lookup(f,quadrant+2);
 			palette[3] = palette_lookup(f,quadrant+3);
-			draw_tile(g->renderer, f, f->ppu->nametable[table][32*y+x]*16, (x*8)+x_offset, (y*8)+y_offset, false, false, f->ppu->bg_pattern_table, palette);
+			draw_tile(g->renderer, f, f->ppu->nametable[table][32 * y + x]*16, (x*8)+x_offset, (y*8)+y_offset, false, false, f->ppu->bg_pattern_table, palette);
 		}
 	}
 }

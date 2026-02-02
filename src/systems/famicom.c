@@ -73,6 +73,8 @@ void famicom_reset (Famicom* famicom, bool warm)
 	famicom->ppu->bg_pattern_table = false;
 	famicom->ppu->address = 0;
 	famicom->ppu->nametable_base = 0;
+	famicom->ppu->scroll_x = 0;
+	famicom->ppu->scroll_y = 0;
 	famicom_reset_controller(famicom);
 	cpu_reset(famicom->cpu, system);
 }
@@ -197,6 +199,15 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 			}
 			return 0;
 		case PPUSCROLL:
+			if (write) {
+				if (f->ppu->write_latch) {
+					if (value != 0)
+						f->ppu->scroll_y = (~value) + 0x100;
+				} else {
+					if (value != 0)
+						f->ppu->scroll_x = (~value) + 0x100;
+				}
+			}
 			f->ppu->write_latch = !f->ppu->write_latch;
 			return 0;
 		case PPUADDR:
@@ -294,13 +305,19 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		return 0;
 	// cartridge
 	} else if (unmapped_addr_start < addr) {
+		int offset;
+		if (f->prg_size == 16384) {
+			offset = 0xC000;
+		} else if (f->prg_size == 32768) {
+			offset = 0x8000;
+		}
 		if (0x7FFF < addr && addr <= 0xFFFF) {
 			if (write)
 				return 0;
 			if (f->prg_size == 16384) {
-				return f->prg[(addr - 0xC000) % f->prg_size];
+				return f->prg[(addr - offset) % f->prg_size];
 			} else if (f->prg_size == 32768) {
-				return f->prg[(addr - 0x8000) % f->prg_size];
+				return f->prg[(addr - offset) % f->prg_size];
 			}
 		}
 	} else {
@@ -358,7 +375,7 @@ void famicom_step(Famicom* famicom)
 	famicom->cpu->current_instruction = i;
 	step(system, famicom->cpu, i, oper);
 	famicom->cycles++;
-	if ((famicom->cycles % 15273) == 0) {
+	if ((famicom->cycles % 15173) == 0) {
 		famicom->ppu->vblank_flag = true;
 	} else {
 		famicom->ppu->vblank_flag = false;

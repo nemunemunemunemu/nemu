@@ -80,6 +80,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 	word addr_x;
 	word addr_y;
 	word addr_f;
+	byte addr_zp;
 	switch (a) {
 	case immediate:
 		return oper[0];
@@ -108,21 +109,21 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		}
 		break;
 	case zeropage_x:
-		addr_f = (oper[0] + cpu->reg[reg_x]) % 0x100;
+		addr_zp = (oper[0] + cpu->reg[reg_x]);
 		if (write) {
-			mem_write(system, addr_f, value);
+			mem_write(system, addr_zp, value);
 			return 0;
 		} else {
-			return mem_read(system, addr_f);
+			return mem_read(system, addr_zp);
 		}
 		break;
 	case zeropage_y:
-		addr_f = (oper[0] + cpu->reg[reg_y]) % 0x100;
+		addr_zp = (oper[0] + cpu->reg[reg_y]);
 		if (write) {
-			mem_write(system, addr_f, value);
+			mem_write(system, addr_zp, value);
 			return 0;
 		} else {
-			return mem_read(system, addr_f);
+			return mem_read(system, addr_zp);
 		}
 		break;
 	case absolute_x:
@@ -144,8 +145,8 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		}
 		break;
 	case zeropage_xi:
-		addr_x = (oper[0] + cpu->reg[reg_x]) % 0x100;
-		addr_f = bytes_to_word(mem_read(system, addr_x+1), mem_read(system, addr_x));
+		addr_zp = (oper[0] + cpu->reg[reg_x]);
+		addr_f = bytes_to_word(mem_read(system, addr_zp+1), mem_read(system, addr_zp));
 		if (write) {
 			mem_write(system, addr_f, value);
 			return 0;
@@ -228,7 +229,8 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 	case shift_rol:
 		value_old = peek(system, cpu, a, oper);
 		value = value_old << 1;
-		poke(system, cpu, a, oper, value + get_p(cpu, carry));
+		value = set_bit(value, 0, get_p(cpu, carry));
+		poke(system, cpu, a, oper, value);
 		set_p(cpu, carry, value_old & 0x80);
 		update_p_nz(cpu, value);
 		break;
@@ -236,7 +238,8 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 	case shift_ror:
 		value_old = peek(system, cpu, a, oper);
 		value = value_old >> 1;
-		poke(system, cpu, a, oper, value + get_p(cpu, carry));
+		value = set_bit(value, 7, get_p(cpu, carry));
+		poke(system, cpu, a, oper, value);
 		set_p(cpu, carry, value_old & 0x01);
 		update_p_nz(cpu, value);
                 break;
@@ -314,8 +317,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		break;
 
 	case or_a:
-		value_old = peek(system, cpu, a, oper);
-		value = value_old | cpu->reg[reg_a];
+		value = peek(system, cpu, a, oper) | cpu->reg[reg_a];
 		set_reg(cpu, reg_a, value);
 		update_p_nz(cpu, value);
 		break;
@@ -375,6 +377,8 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 	case branch_rti:
 		set_reg(cpu, reg_p, pull_stack(system, cpu));
+		set_p(cpu, unused_flag, true);
+		set_p(cpu, break_, false);
 		low = pull_stack(system, cpu);
 		high = pull_stack(system, cpu);
 		addr = bytes_to_word(high, low);
@@ -405,7 +409,6 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 	case push_reg_stack:
 		push_stack(system, cpu, cpu->reg[r]);
-		set_p(cpu, break_, true);
 		break;
 
 	case pull_reg_stack:
@@ -435,51 +438,6 @@ void nmi(System system, Cpu_6502* cpu)
 	set_p(cpu, break_, false);
 	push_stack(system, cpu, cpu->reg[reg_p]);
 	cpu->pc = bytes_to_word(mem_read(system, 0xFFFB), mem_read(system, 0xFFFA));
-}
-
-void print_addressing_mode(enum addressing_mode a)
-{
-       switch (a) {
-       case zeropage:
-	       printf("(zp)");
-	       break;
-       case relative:
-	       printf("(rel)");
-	       break;
-       case immediate:
-	       printf("(imm)");
-	       break;
-       case implied:
-	       printf("(imp)");
-	       break;
-       case accumulator:
-	       printf("(acc)");
-	       break;
-       case absolute:
-	       printf("(abs)");
-	       break;
-       case absolute_indirect:
-	       printf("(abs_i)");
-	       break;
-       case absolute_x:
-	       printf("(abs_x)");
-	       break;
-       case absolute_y:
-	       printf("(abs_y)");
-	       break;
-       case zeropage_x:
-	       printf("(zp_x)");
-	       break;
-       case zeropage_y:
-	       printf("(zp_y)");
-	       break;
-       case zeropage_xi:
-	       printf("(zp_xi)");
-	       break;
-       case zeropage_yi:
-	       printf("(zp_yi) ");
-	       break;
-       }
 }
 
 void nop ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
@@ -767,6 +725,8 @@ void pla ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 
 void php ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 {
+	set_p(cpu, unused_flag, true);
+	set_p(cpu, break_, true);
 	instruction(system, cpu, push_reg_stack, reg_p, a, 0, oper, "php");
 }
 
@@ -1333,6 +1293,48 @@ void write_cpu_state (Cpu_6502* cpu, System system, FILE* f)
 
 	word opera = bytes_to_word(oper2, oper1);
 	char addr_mode[50];
+	char addr_mode_n[50];
+        switch (i.a) {
+        case zeropage:
+		snprintf(addr_mode_n, sizeof(addr_mode_n), "(zp)");
+		break;
+        case relative:
+		snprintf(addr_mode_n, sizeof(addr_mode_n), "(rel)");
+		break;
+        case immediate:
+	       snprintf(addr_mode_n, sizeof(addr_mode_n), "(imm)");
+	       break;
+        case implied:
+	       snprintf(addr_mode_n, sizeof(addr_mode_n), "(imp)");
+	       break;
+        case accumulator:
+	       snprintf(addr_mode_n, sizeof(addr_mode_n), "(acc)");
+	       break;
+        case absolute:
+	       snprintf(addr_mode_n, sizeof(addr_mode_n), "(abs)");
+	       break;
+        case absolute_indirect:
+	       snprintf(addr_mode_n, sizeof(addr_mode_n), "(abs_i)");
+	       break;
+        case absolute_x:
+	       snprintf(addr_mode_n, sizeof(addr_mode_n), "(abs_x)");
+	       break;
+        case absolute_y:
+	       snprintf(addr_mode_n, sizeof(addr_mode_n), "(abs_y)");
+	       break;
+        case zeropage_x:
+	       snprintf(addr_mode_n, sizeof(addr_mode_n), "(zp_x)");
+	       break;
+        case zeropage_y:
+	       snprintf(addr_mode_n, sizeof(addr_mode_n), "(zp_y)");
+	       break;
+        case zeropage_xi:
+	       snprintf(addr_mode_n, sizeof(addr_mode_n), "(zp_xi)");
+	       break;
+        case zeropage_yi:
+	       snprintf(addr_mode_n, sizeof(addr_mode_n), "(zp_yi)");
+	       break;
+        }
 	switch (i.a) {
 	case accumulator: case implied:
 		snprintf(addr_mode, sizeof(addr_mode), " ");
@@ -1348,7 +1350,7 @@ void write_cpu_state (Cpu_6502* cpu, System system, FILE* f)
 		break;
 	}
 	byte oper[] = {oper1, oper2};
-	fprintf(f, "%X %s %s  -  ", i.o, i.m, addr_mode);
+	fprintf(f, "%X %s %s %s  -  ", i.o, addr_mode_n, i.m, addr_mode);
 
 	char* reg_names[] = {
 		"A",
