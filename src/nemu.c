@@ -158,7 +158,7 @@ void draw_graphics ()
 			draw_oam(graphics, famicom);
 		}
 		if (famicom->cpu->current_instruction_name) {
-			draw_debug(graphics, selected_system, famicom->cpu, 0, 0);
+			draw_debug(graphics, selected_system, famicom->cpu, 0, famicom->ppu->nametable_base);
 		}
 		if (famicom->chr_size != 0) {
 			draw_pattern_table(graphics, famicom, 0, 0, 100);
@@ -234,14 +234,13 @@ void famicom_loop()
 				case SDLK_ESCAPE:
 					famicom->cpu->running = false;
 					break;
-					/*
-				case SDLK_SPACE:
+				case SDLK_F3:
 					pause = !pause;
 					break;
-				case SDLK_LCTRL:
+				case SDLK_F4:
 					famicom_step(famicom);
 					draw_graphics();
-					break;*/
+					break;
 				case SDLK_F1:
 					famicom_reset(famicom, true);
 					famicom_step(famicom);
@@ -314,6 +313,6 @@ void famicom_loop()
 			}
 			draw_graphics();
 		}
-		SDL_Delay(1000 / 60);
+		SDL_Delay(1000 / 80);
 	}
 }

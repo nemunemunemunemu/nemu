@@ -203,29 +203,52 @@ void draw_tile(SDL_Renderer* r, Famicom* f, int tile, int x_offset, int y_offset
 	} else if (table == 1) {
 		table_start = 0x1000;
 	}
-	for (int y=0; y<8; y++) {
-		for (int x=0; x<8; x++) {
-			byte plane1;
-			byte plane2;
-			plane1 = f->chr[table_start + tile + y];
-			plane2 = f->chr[table_start + tile + y + 8];
-			if (!hflip) {
-				plane1 = reverse_byte_order(plane1);
-				plane2 = reverse_byte_order(plane2);
-			}
-			byte first_bit = get_bit(plane1, x);
-			byte second_bit = get_bit(plane2, x);
-			if (!(first_bit == 0 && second_bit == 0)) {
-				if (first_bit == 1 && second_bit == 0) {
-					SDL_SetRenderDrawColor(r, palette[1].r, palette[1].g, palette[1].b, 0xFF);
-				} else if (first_bit == 0 && second_bit == 1) {
-					SDL_SetRenderDrawColor(r, palette[2].r, palette[2].g, palette[2].b, 0xFF);
-				} else if (first_bit == 1 && second_bit == 1) {
-					SDL_SetRenderDrawColor(r, palette[3].r, palette[3].g, palette[3].b, 0xFF);
+	if (!vflip) {
+		for (int y=0; y<8; y++) {
+			for (int x=0; x<8; x++) {
+				byte plane1;
+				byte plane2;
+				plane1 = f->chr[table_start + tile + y];
+				plane2 = f->chr[table_start + tile + y + 8];
+				if (!hflip) {
+					plane1 = reverse_byte_order(plane1);
+					plane2 = reverse_byte_order(plane2);
 				}
-				if (vflip) {
-					SDL_RenderDrawPoint(r, y + x_offset, x + y_offset);
-				} else {
+				byte first_bit = get_bit(plane1, x);
+				byte second_bit = get_bit(plane2, x);
+				if (!(first_bit == 0 && second_bit == 0)) {
+					if (first_bit == 1 && second_bit == 0) {
+						SDL_SetRenderDrawColor(r, palette[1].r, palette[1].g, palette[1].b, 0xFF);
+					} else if (first_bit == 0 && second_bit == 1) {
+						SDL_SetRenderDrawColor(r, palette[2].r, palette[2].g, palette[2].b, 0xFF);
+					} else if (first_bit == 1 && second_bit == 1) {
+						SDL_SetRenderDrawColor(r, palette[3].r, palette[3].g, palette[3].b, 0xFF);
+					}
+					SDL_RenderDrawPoint(r, x + x_offset, y + y_offset);
+				}
+			}
+		}
+	} else {
+		for (int y=7; -1<y; y--) {
+			for (int x=0; x<8; x++) {
+				byte plane1;
+				byte plane2;
+				plane1 = f->chr[table_start + tile + y];
+				plane2 = f->chr[table_start + tile + y + 8];
+				if (hflip) {
+					plane1 = reverse_byte_order(plane1);
+					plane2 = reverse_byte_order(plane2);
+				}
+				byte first_bit = get_bit(plane1, x);
+				byte second_bit = get_bit(plane2, x);
+				if (!(first_bit == 0 && second_bit == 0)) {
+					if (first_bit == 1 && second_bit == 0) {
+						SDL_SetRenderDrawColor(r, palette[1].r, palette[1].g, palette[1].b, 0xFF);
+					} else if (first_bit == 0 && second_bit == 1) {
+						SDL_SetRenderDrawColor(r, palette[2].r, palette[2].g, palette[2].b, 0xFF);
+					} else if (first_bit == 1 && second_bit == 1) {
+						SDL_SetRenderDrawColor(r, palette[3].r, palette[3].g, palette[3].b, 0xFF);
+					}
 					SDL_RenderDrawPoint(r, x + x_offset, y + y_offset);
 				}
 			}
@@ -297,7 +320,7 @@ void draw_oam(SDL_Instance* g, Famicom* f)
 		palette[2] = palette_lookup(f,sprite_palette+2);
 		palette[3] = palette_lookup(f,sprite_palette+3);
 		byte sprite_y = f->ppu->oam[i][0];
-		byte tile = f->ppu->oam[i][1]*16;
+		int tile = f->ppu->oam[i][1]*16;
 		byte sprite_x = f->ppu->oam[i][3];
 		draw_tile(g->renderer, f, tile, sprite_x, sprite_y, hflip, vflip, f->ppu->sprite_pattern_table, palette);
 	}
