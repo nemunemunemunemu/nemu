@@ -6,7 +6,7 @@ edit `config.mk` to correspond to the paths of your SDL2 and xlib installation (
 
 ## credits / libraries
 
-- SDL2: https://www.libsdl.org/
+- SDL3: https://www.libsdl.org/
 
 - cJSON: https://github.com/DaveGamble/cJSON
 
