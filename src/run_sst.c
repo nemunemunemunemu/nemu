@@ -10,8 +10,6 @@
 
 FILE* dfh;
 
-
-
 int run_test(int opcode, char* path);
 
 int main(int argc, char* argv[])

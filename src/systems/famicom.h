@@ -5,6 +5,11 @@ typedef struct famicom_debug {
 	bool irq;
 } Famicom_debug;
 
+typedef struct famicom_apu {
+	byte pulse1_timer;
+	byte pulse1_freq;
+} Famicom_apu;
+
 enum famicom_joypad_buttons {
 	joypad_a,
 	joypad_b,
@@ -30,6 +35,7 @@ typedef struct famicom_controller {
 typedef struct famicom {
 	Cpu_6502* cpu;
 	Famicom_ppu* ppu;
+	Famicom_apu apu;
 	Famicom_debug debug;
 	int cycles;
 	int prg_size;

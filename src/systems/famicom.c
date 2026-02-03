@@ -64,7 +64,7 @@ void famicom_reset (Famicom* famicom, bool warm)
 		memset( famicom->ppu->palettes, 0, sizeof(byte) * sizeof(famicom->ppu->palettes) );
 	}
 	famicom->cycles = 0;
-	famicom->ppu->vblank_flag = false;
+	famicom->ppu->vblank_flag = true;
 	famicom->ppu->nmi_enable = false;
 	famicom->ppu->write_latch = false;
 	famicom->ppu->vram_addr = 0;
@@ -155,6 +155,8 @@ enum ppu_mmapped_register {
 	PPUDATA,
 };
 
+const word PULSE1_TL = 0x4002;
+const word PULSE1_TH = 0x4003;
 const word OAMDMA = 0x4014;
 void oamdma(Famicom* f, byte value);
 byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
@@ -249,6 +251,17 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		case OAMDMA:
 			if (write) {
 				oamdma(f, value);
+			}
+			return 0;
+		case PULSE1_TL:
+			if (write) {
+				f->apu.pulse1_timer = value;
+			}
+			return 0;
+		case PULSE1_TH:
+			if (write) {
+				f->apu.pulse1_timer = ((value & f->apu.pulse1_timer) & 0xF8);
+				f->apu.pulse1_freq = value & 0x07;
 			}
 			return 0;
 		case 0x4016:
@@ -375,11 +388,7 @@ void famicom_step(Famicom* famicom)
 	famicom->cpu->current_instruction = i;
 	step(system, famicom->cpu, i, oper);
 	famicom->cycles++;
-	if ((famicom->cycles % 15173) == 0) {
-		famicom->ppu->vblank_flag = true;
-	} else {
-		famicom->ppu->vblank_flag = false;
-	}
+
 	if (famicom->ppu->vblank_flag && famicom->ppu->nmi_enable) {
 		nmi(system, famicom->cpu);
 		famicom->ppu->nmi_enable = false;

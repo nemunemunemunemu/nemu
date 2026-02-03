@@ -3,8 +3,8 @@
 #include <string.h>
 #include <stdbool.h>
 #include <signal.h>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_mixer.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 #include "types.h"
 #include "systems/system.h"
 
@@ -14,6 +14,7 @@
 #include "systems/apple1.h"
 
 #include "graphics.h"
+#include "audio.h"
 
 #define VERSION "0.0.0"
 
@@ -24,6 +25,7 @@ Apple1* apple1;
 SDL_Instance* graphics;
 SDL_Color palette[4];
 bool debug_file;
+FILE* rom;
 FILE* dfh;
 
 void usage(char* name);
@@ -59,13 +61,12 @@ int main(int argc, char* argv[])
 
 	switch (selected_system.s) {
 	case famicom_system:
-		FILE* f;
 		if (debug_file) {
-			f = fopen(argv[2], "rb");
+			rom = fopen(argv[2], "rb");
 		} else {
-			f = fopen(argv[1], "rb");
+			rom = fopen(argv[1], "rb");
 		}
-		if (f == NULL) {
+		if (rom == NULL) {
 			printf("couldn't open file\n");
 			return 1;
 		}
@@ -73,7 +74,7 @@ int main(int argc, char* argv[])
 		if (famicom == NULL) {
 			return 1;
 		}
-		if (famicom_load_rom(famicom, f) == 1) {
+		if (famicom_load_rom(famicom, rom) == 1) {
 			free(famicom);
 			return 1;
 		}
@@ -93,7 +94,6 @@ int main(int argc, char* argv[])
 		destroy_system();
 		return 1;
 	}
-
 	switch(selected_system.s) {
 	case famicom_system:
 		famicom_loop();
@@ -148,8 +148,6 @@ void draw_graphics ()
 {
 	SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
 	SDL_RenderClear(graphics->renderer);
-	SDL_SetRenderDrawColor(graphics->renderer_debug, 0x99,0x50,0x99,0xFF);
-	SDL_RenderClear(graphics->renderer_debug);
 
 	switch (selected_system.s) {
 	case famicom_system:
@@ -157,21 +155,17 @@ void draw_graphics ()
 			draw_nametable(graphics, famicom, famicom->ppu->scroll_x, famicom->ppu->scroll_y, 0);
 			draw_oam(graphics, famicom);
 		}
-		if (famicom->cpu->current_instruction_name) {
-			draw_debug(graphics, selected_system, famicom->cpu, 0, famicom->ppu->nametable_base);
-		}
+		/*
 		if (famicom->chr_size != 0) {
 			draw_pattern_table(graphics, famicom, 0, 0, 100);
 			draw_pattern_table(graphics, famicom, 1, 129, 100);
-		}
+			}*/
 		break;
 	case apple1_system:
-		draw_debug(graphics, selected_system, apple1->cpu, 0, 0);
 		break;
 	}
 
 	SDL_RenderPresent(graphics->renderer);
-	SDL_RenderPresent(graphics->renderer_debug);
 }
 
 void apple1_loop()
@@ -181,11 +175,11 @@ void apple1_loop()
 	while (apple1->cpu->running) {
 		while (SDL_PollEvent(&e) != 0 ) {
 			switch (e.type) {
-			case SDL_QUIT:
+			case SDL_EVENT_QUIT:
 				apple1->cpu->running = false;
 				break;
-			case SDL_KEYDOWN:
-				switch (e.key.keysym.sym) {
+			case SDL_EVENT_KEY_DOWN:
+				switch (e.key.key) {
 				case SDLK_ESCAPE:
 					apple1->cpu->running = false;
 					break;
@@ -226,11 +220,11 @@ void famicom_loop()
 	while (famicom->cpu->running) {
 		while( SDL_PollEvent( &e ) != 0 ) {
 			switch(e.type) {
-			case SDL_QUIT:
+			case SDL_EVENT_QUIT:
 				famicom->cpu->running = false;
 				break;
-			case SDL_KEYDOWN:
-				switch (e.key.keysym.sym) {
+			case SDL_EVENT_KEY_DOWN:
+				switch (e.key.key) {
 				case SDLK_ESCAPE:
 					famicom->cpu->running = false;
 					break;
@@ -276,8 +270,8 @@ void famicom_loop()
 					break;
 				}
 				break;
-			case SDL_KEYUP:
-				switch (e.key.keysym.sym) {
+			case SDL_EVENT_KEY_UP:
+				switch (e.key.key) {
 				case SDLK_RETURN:
 					famicom->controller_p1.start = false;
 					break;
@@ -305,6 +299,8 @@ void famicom_loop()
 		}
 		if (!pause) {
 			for (int i=0; i<famicom_cycles; i++) {
+				if (i < 3)
+					famicom->ppu->vblank_flag = true;
 				famicom_step(famicom);
 				if (!famicom->cpu->running)
 					break;
@@ -313,6 +309,7 @@ void famicom_loop()
 			}
 			draw_graphics();
 		}
-		SDL_Delay(1000 / 80);
+		apu_process(graphics, famicom);
+		SDL_Delay(1000 / 60);
 	}
 }
