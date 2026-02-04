@@ -1,5 +1,6 @@
 typedef struct ppu {
 	bool vblank_flag;
+	bool nmi_hit;
 	bool nmi_enable;
 	bool write_latch;
 	byte vram_addr;

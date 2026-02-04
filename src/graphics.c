@@ -12,10 +12,7 @@
 #include "audio.h"
 
 const int window_width = 256;
-const int window_height = 264;
-
-const int debug_window_width = 256;
-const int debug_window_height = 812;
+const int window_height = 256;
 
 const int window_scale = 2;
 
@@ -42,6 +39,8 @@ SDL_Instance* init_graphics()
 		SDL_Quit();
 		return NULL;
 	}
+	SDL_Texture* ppu_texture = SDL_CreateTexture(instance->renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, 256, 256);
+	instance->ppu_texture = ppu_texture;
 	if (window_scale != 1) {
 		SDL_SetWindowSize(instance->window, window_width * window_scale, window_height * window_scale);
 		SDL_SetRenderLogicalPresentation(instance->renderer, window_width, window_height, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
@@ -53,6 +52,7 @@ SDL_Instance* init_graphics()
 void graphics_destroy(SDL_Instance* graphics)
 {
 	SDL_DestroyWindow(graphics->window);
+	SDL_DestroyTexture(graphics->ppu_texture);
 	SDL_DestroyRenderer(graphics->renderer);
 	SDL_DestroyAudioStream(graphics->stream);
 	free(graphics);
@@ -162,11 +162,11 @@ void draw_nametable(SDL_Instance* g, Famicom* f, int x_offset, int y_offset, int
 		for (byte x=0;x<32;x++) {
 			byte attr = f->ppu->attribute_table[table][8 * (y/4) + (x/4)];
 			byte topleft = (attr & 0x03)*4;
-			byte topright = (attr & 0x0c)*4;
-			byte bottomleft = (attr & 0x30)*4;
-			byte bottomright = (attr & 0xc0)*4;
+			byte topright = ((attr & 0x0c) >> 2)*4;
+			byte bottomleft = ((attr & 0x30) >> 4)*4;
+			byte bottomright = ((attr & 0xc0) >> 6)*4;
 			byte quadrant;
-			const int width = 2;
+			const int width = 4;
 			if ((x % width) <= 2 && (y % width) <= 2) {
 				quadrant = topleft;
 			}
@@ -180,7 +180,8 @@ void draw_nametable(SDL_Instance* g, Famicom* f, int x_offset, int y_offset, int
 				quadrant = bottomright;
 			}
 			SDL_Color palette[4];
-			palette[0].r = 0; palette[0].g = 0; palette[0].b = 0; palette[0].a = 0xFF;
+			//palette[0].r = 0; palette[0].g = 0; palette[0].b = 0; palette[0].a = 0xFF;
+			palette[0] = palette_lookup(f,quadrant);
 			palette[1] = palette_lookup(f,quadrant+1);
 			palette[2] = palette_lookup(f,quadrant+2);
 			palette[3] = palette_lookup(f,quadrant+3);
@@ -207,3 +208,147 @@ void draw_oam(SDL_Instance* g, Famicom* f)
 	}
 }
 
+Uint32 get_color(SDL_Color palette[4], byte plane1, byte plane2, int x)
+{
+	Uint32 color;
+	byte first_bit = get_bit(plane1, (x%8));
+	byte second_bit = get_bit(plane2, (x%8));
+	if (first_bit == 0 && second_bit == 0) {
+		color = palette[0].r << 16 | palette[0].g << 8 | palette[0].b;
+	} else if (first_bit == 1 && second_bit == 0) {
+		color = palette[1].r << 16 | palette[1].g << 8 | palette[1].b;
+	} else if (first_bit == 0 && second_bit == 1) {
+		color = palette[2].r << 16 | palette[2].g << 8 | palette[2].b;
+	} else if (first_bit == 1 && second_bit == 1) {
+		color = palette[3].r << 16 | palette[3].g << 8 | palette[3].b;
+	}
+	return color;
+}
+
+void draw_ppu(SDL_Instance* g, Famicom* f)
+{
+	SDL_SetRenderTarget(g->renderer, g->ppu_texture);
+	f->ppu->nmi_hit = false;
+	int x;
+	int y;
+	int tile;
+	bool hflip = false;
+	bool vflip = false;
+	bool draw_sprite = false;
+	SDL_Color palette[4];
+	word bg_table_start = 0;
+	word sprite_table_start = 0;
+	byte plane1;
+	byte plane2;
+	for (y=0; y<256; y++) {
+		if (240 <= y) {
+			if (!f->ppu->nmi_hit)
+				f->ppu->vblank_flag = true;
+			f->ppu->nmi_hit = true;
+		}
+		//memset(palette, 0, sizeof(byte));
+		bg_table_start = 0;
+		sprite_table_start = 0;
+		//memset(sprites_to_draw, 0, sizeof(byte));
+		int sprites_to_draw[128];
+		int sprite_index = 0;
+		for (int i=0; i<64; i++) {
+			byte sprite_y = f->ppu->oam[i][0];
+			if (y<(sprite_y+8) && !(y<sprite_y)) {
+				sprites_to_draw[sprite_index] = i;
+				sprite_index++;
+			}
+		}
+		for (x=0; x<256; x++) {
+			draw_sprite = false;
+			if (f->ppu->bg_pattern_table) {
+				bg_table_start = 0x1000;
+			} else {
+				bg_table_start = 0;
+			}
+			if (f->ppu->sprite_pattern_table) {
+				sprite_table_start = 0x1000;
+			} else {
+				sprite_table_start = 0;
+			}
+			if (0 < sprite_index) {
+				for (int i=0; i<sprite_index; i++) {
+					int sprite_id = sprites_to_draw[i];
+					byte sprite_x = f->ppu->oam[sprite_id][3];
+					if (x<(sprite_x+8) && !(x<sprite_x-1)) {
+						draw_sprite = true;
+						hflip = f->ppu->oam[sprite_id][2]&0x80;
+						vflip = f->ppu->oam[sprite_id][2]&0x40;
+						int sprite_tile = f->ppu->oam[sprite_id][1]*16;
+						int sprite_palette = (f->ppu->oam[sprite_id][2]&0x03) + 0x10;
+						tile = sprite_tile;
+						palette[0] = palette_lookup(f,sprite_palette);
+						palette[1] = palette_lookup(f,sprite_palette+1);
+						palette[2] = palette_lookup(f,sprite_palette+2);
+						palette[3] = palette_lookup(f,sprite_palette+3);
+					}
+				}
+			}
+			if (draw_sprite) {
+				if (vflip) {
+					plane1 = f->chr[sprite_table_start + tile + (y%8)];
+					plane2 = f->chr[sprite_table_start + tile + (y%8) + 8];
+				} else {
+					plane1 = f->chr[sprite_table_start + tile + (y%8)];
+					plane2 = f->chr[sprite_table_start + tile + (y%8) + 8];
+				}
+			} else {
+				hflip = false;
+				vflip = false;
+				tile = f->ppu->nametable[0][32 * (y/8) + (x/8)]*16;
+				byte attr = f->ppu->attribute_table[0][8 * (y/32) + (x/32)];
+				byte quadrant = 0;
+				byte topleft = (attr & 0x03)*4;
+				byte topright = ((attr & 0x0c) >> 2)*4;
+				byte bottomleft = ((attr & 0x30) >> 4)*4;
+				byte bottomright = ((attr & 0xc0) >> 6)*4;
+				plane1 = f->chr[bg_table_start + tile + (y%8)];
+				plane2 = f->chr[bg_table_start + tile + (y%8) + 8];
+				int xx = x % 32;
+				int yy = y % 32;
+				if (xx <= 16 && yy <= 16) {
+					quadrant = topleft;
+				} else if (16 <= xx && yy <= 16) {
+					quadrant = topright;
+				} else if (xx <= 16 && 16 <= yy) {
+					quadrant = bottomleft;
+				} else if (16 <= xx && 16 <= yy) {
+					quadrant = bottomright;
+				}
+
+				palette[0].r = 0; palette[0].g = 0; palette[0].b = 0; palette[0].a = 0xFF;
+				palette[1] = palette_lookup(f,quadrant+1);
+				palette[2] = palette_lookup(f,quadrant+2);
+				palette[3] = palette_lookup(f,quadrant+3);
+			}
+			if (!hflip) {
+				plane1 = reverse_byte_order(plane1);
+				plane2 = reverse_byte_order(plane2);
+			}
+			Uint32 color = get_color(palette, plane1, plane2, x);
+			if (get_bit(plane1, (x%8)) == 0 && get_bit(plane2, (x%8)) == 0) {
+				if (draw_sprite) {
+					palette[0].r = 0; palette[0].g = 0; palette[0].b = 0;
+					palette[1] = palette_lookup(f,0+1);
+					palette[2] = palette_lookup(f,0+2);
+					palette[3] = palette_lookup(f,0+3);
+					tile = f->ppu->nametable[0][32 * (y/8) + (x/8)]*16;
+					plane1 = f->chr[bg_table_start + tile + (y%8)];
+					plane2 = f->chr[bg_table_start + tile + (y%8) + 8];
+					color = get_color(palette, plane1, plane2, x);
+				} else {
+					color = 0;
+				}
+			}
+			SDL_SetRenderDrawColor(g->renderer, (color & 0xFF0000) >> 16, (color & 0x00FF00) >> 8, color & 0xFF, 0xFF);
+			SDL_RenderPoint(g->renderer, x, y);
+		}
+	}
+	SDL_SetRenderTarget(g->renderer, NULL);
+	SDL_RenderTexture(g->renderer, g->ppu_texture, NULL, NULL);
+}

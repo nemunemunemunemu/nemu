@@ -1,15 +1,31 @@
 include config.mk
 
-SRC =  src/bitmath.c src/audio.c src/graphics.c src/chips/6502.c src/systems/famicom.c src/systems/apple1.c src/nemu.c
-OBJ =  ${SRC:.c=.o}
+all: audio graphics sst famicom apple1 cpu nemu link
 
-all: nemu
+audio:
+	${CC} ${CFLAGS} -c src/audio.c -o bin/audio.o
 
-.c.o:
-	mkdir -p bin && cd bin && ${CC} -c ${CFLAGS} ../$<
+graphics:
+	${CC} ${CFLAGS} -c src/graphics.c -o bin/graphics.o
 
-nemu: ${OBJ}
-	${CC} -o bin/$@ bin/*.o ${LDFLAGS}
+sst:
+	${CC} -c src/systems/sst.c -o bin/sst.o
+
+famicom:
+	${CC} -c src/systems/famicom.c -o bin/famicom.o
+
+apple1:
+	${CC} -c src/systems/apple1.c -o bin/apple1.o
+
+cpu:
+	${CC} -c src/chips/6502.c -o bin/6502.o
+
+nemu:
+	${CC} -c src/bitmath.c -o bin/bitmath.o
+	${CC} ${CFLAGS} src/nemu.c -c -o bin/nemu.o
+
+link:
+	${CC} ${LDFLAGS} bin/*.o -o bin/nemu
 
 run_sst:
 	${CC} -O2 src/bitmath.c src/chips/6502.c src/systems/*.c src/cjson/cJSON.c src/run_sst.c -o bin/run_sst

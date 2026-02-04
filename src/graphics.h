@@ -2,6 +2,7 @@ typedef struct sdl_instance {
 	SDL_Window* window;
 	SDL_Renderer* renderer;
 	SDL_AudioStream* stream;
+	SDL_Texture* ppu_texture;
 } SDL_Instance;
 
 SDL_Instance* init_graphics();
@@ -11,3 +12,4 @@ void draw_tile(SDL_Renderer* r, Famicom* f, int tile, int x_offset, int y_offset
 void draw_pattern_table(SDL_Instance* g, Famicom* f, int table, int x, int y);
 void draw_nametable(SDL_Instance* g, Famicom* f, int x_offset, int y_offset, int table);
 void draw_oam(SDL_Instance* g, Famicom* f);
+void draw_ppu(SDL_Instance* g, Famicom* f);

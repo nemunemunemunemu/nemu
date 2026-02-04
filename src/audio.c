@@ -9,7 +9,6 @@
 #include "systems/famicom.h"
 #include "graphics.h"
 #include "audio.h"
-#include "math.h"
 
 void init_audio(SDL_Instance* g)
 {
@@ -22,15 +21,14 @@ void init_audio(SDL_Instance* g)
 		printf("failed to start audio: %s\n", SDL_GetError());
 	} else {
 		g->stream = stream;
-		SDL_ResumeAudioStreamDevice(g->stream);
+		//SDL_ResumeAudioStreamDevice(g->stream);
 	}
 }
 // https://nesdev-wiki.nes.science/wikipages/Pulse_Channel_frequency_chart.xhtml
-
+int current_sine_sample = 0;
 void apu_process(SDL_Instance* g, Famicom* famicom)
 {
 	float samples[512];
-	int current_sine_sample = 0;
 	const int minimum_audio = (8000 * sizeof (float)) / 2;
 	if (SDL_GetAudioStreamQueued(g->stream) < minimum_audio) {
 		int i;
@@ -41,6 +39,6 @@ void apu_process(SDL_Instance* g, Famicom* famicom)
 			current_sine_sample++;
 		}
 	}
-        current_sine_sample %= 8000;
+        current_sine_sample %= 3000;
         SDL_PutAudioStreamData(g->stream, samples, sizeof (samples));
 }

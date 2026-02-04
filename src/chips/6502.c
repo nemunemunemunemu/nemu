@@ -156,6 +156,12 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		break;
 	case zeropage_yi:
 		addr_f = bytes_to_word(mem_read(system, oper[0]+1), mem_read(system, oper[0])) + cpu->reg[reg_y];
+		/*
+		if ((addr_f & 0x00FF) == 0xFF) {
+			addr_f = (addr_f & 0xFF00) & cpu->reg[reg_y];
+		} else {
+			addr_f += cpu->reg[reg_y];
+			}*/
 		if (write) {
 			mem_write(system, addr_f, value);
 			return 0;
@@ -353,7 +359,11 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		if (a == absolute) {
 			addr = opera;
 		} else if (a == absolute_indirect) {
-			addr = bytes_to_word(mem_read(system,opera+1), mem_read(system,opera));
+			if (oper[0] == 0xFF) {
+				addr = bytes_to_word(mem_read(system, bytes_to_word(oper[1],00)), mem_read(system,opera));
+			} else {
+				addr = bytes_to_word(mem_read(system,opera+1), mem_read(system,opera));
+			}
 		}
 		cpu->pc = addr;
 		cpu->branch_taken = true;

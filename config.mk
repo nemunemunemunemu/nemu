@@ -10,6 +10,6 @@ OPUSINC = /usr/local/include/opus
 LIBEPOLLINC = /usr/local/include/libepoll-shim
 
 INCS = -I/usr/local/include -I${SDL3INC} -I${X11INC} -I${LIBEPOLLINC}
-LIBS = -L/usr/local/lib -lSDL3 -L${X11LIB} -lm
+LIBS = -L/usr/local/lib -lSDL3 -L${X11LIB} 
 CFLAGS = -D_REENTRANT -O0 -g ${INCS}
 LDFLAGS = ${LIBS}

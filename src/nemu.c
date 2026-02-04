@@ -148,13 +148,14 @@ void draw_graphics ()
 {
 	SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
 	SDL_RenderClear(graphics->renderer);
-
 	switch (selected_system.s) {
 	case famicom_system:
+		/*
 		if (famicom->chr_size != 0) {
 			draw_nametable(graphics, famicom, famicom->ppu->scroll_x, famicom->ppu->scroll_y, 0);
 			draw_oam(graphics, famicom);
-		}
+			}*/
+		draw_ppu(graphics, famicom);
 		/*
 		if (famicom->chr_size != 0) {
 			draw_pattern_table(graphics, famicom, 0, 0, 100);
@@ -164,7 +165,6 @@ void draw_graphics ()
 	case apple1_system:
 		break;
 	}
-
 	SDL_RenderPresent(graphics->renderer);
 }
 
@@ -212,6 +212,7 @@ void apple1_loop()
 }
 
 const int famicom_cycles = 29780;
+//const int famicom_cycles = 29779;
 
 void famicom_loop()
 {
@@ -299,8 +300,6 @@ void famicom_loop()
 		}
 		if (!pause) {
 			for (int i=0; i<famicom_cycles; i++) {
-				if (i < 3)
-					famicom->ppu->vblank_flag = true;
 				famicom_step(famicom);
 				if (!famicom->cpu->running)
 					break;
@@ -309,7 +308,7 @@ void famicom_loop()
 			}
 			draw_graphics();
 		}
-		apu_process(graphics, famicom);
-		SDL_Delay(1000 / 60);
+		//apu_process(graphics, famicom);
+		//SDL_Delay(1000 / 60);
 	}
 }

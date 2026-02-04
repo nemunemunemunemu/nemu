@@ -64,7 +64,7 @@ void famicom_reset (Famicom* famicom, bool warm)
 		memset( famicom->ppu->palettes, 0, sizeof(byte) * sizeof(famicom->ppu->palettes) );
 	}
 	famicom->cycles = 0;
-	famicom->ppu->vblank_flag = true;
+	famicom->ppu->vblank_flag = false;
 	famicom->ppu->nmi_enable = false;
 	famicom->ppu->write_latch = false;
 	famicom->ppu->vram_addr = 0;
@@ -75,6 +75,7 @@ void famicom_reset (Famicom* famicom, bool warm)
 	famicom->ppu->nametable_base = 0;
 	famicom->ppu->scroll_x = 0;
 	famicom->ppu->scroll_y = 0;
+	famicom->ppu->nmi_hit = false;
 	famicom_reset_controller(famicom);
 	cpu_reset(famicom->cpu, system);
 }
@@ -393,6 +394,8 @@ void famicom_step(Famicom* famicom)
 		nmi(system, famicom->cpu);
 		famicom->ppu->nmi_enable = false;
 		famicom->ppu->vblank_flag = false;
+		famicom->ppu->nmi_hit = true;
 		famicom->debug.nmi = true;
+		printf("NMI\n");
 	}
 }
