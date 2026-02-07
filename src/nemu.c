@@ -150,8 +150,8 @@ void draw_graphics ()
 	SDL_RenderClear(graphics->renderer);
 	switch (selected_system.s) {
 	case famicom_system:
-		/*
-		if (famicom->chr_size != 0) {
+		//famicom->ppu->vblank_flag = true;
+		/*if (famicom->chr_size != 0) {
 			draw_nametable(graphics, famicom, famicom->ppu->scroll_x, famicom->ppu->scroll_y, 0);
 			draw_oam(graphics, famicom);
 			}*/
@@ -214,11 +214,17 @@ void apple1_loop()
 const int famicom_cycles = 29780;
 //const int famicom_cycles = 29779;
 
+int FPS = 120;
+int frameDelay = 8;
+Uint32 frameStart;
+int frameTime;
+
 void famicom_loop()
 {
 	bool pause = false;
 	SDL_Event e;
 	while (famicom->cpu->running) {
+		frameStart = SDL_GetTicks();
 		while( SDL_PollEvent( &e ) != 0 ) {
 			switch(e.type) {
 			case SDL_EVENT_QUIT:
@@ -307,8 +313,12 @@ void famicom_loop()
 					write_cpu_state(famicom->cpu, selected_system, dfh);
 			}
 			draw_graphics();
+			apu_process(graphics, famicom);
+			frameTime = SDL_GetTicks() - frameStart;
+			if(frameDelay > frameTime) {
+				SDL_Delay(frameDelay - frameTime);
+			}
 		}
-		//apu_process(graphics, famicom);
-		//SDL_Delay(1000 / 60);
+		//SDL_Delay(1);
 	}
 }

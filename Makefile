@@ -9,19 +9,19 @@ graphics:
 	${CC} ${CFLAGS} -c src/graphics.c -o bin/graphics.o
 
 sst:
-	${CC} -c src/systems/sst.c -o bin/sst.o
+	${CC} ${CFLAGS} -c src/systems/sst.c -o bin/sst.o
 
 famicom:
-	${CC} -c src/systems/famicom.c -o bin/famicom.o
+	${CC} ${CFLAGS} -c src/systems/famicom.c -o bin/famicom.o
 
 apple1:
-	${CC} -c src/systems/apple1.c -o bin/apple1.o
+	${CC} ${CFLAGS} -c src/systems/apple1.c -o bin/apple1.o
 
 cpu:
-	${CC} -c src/chips/6502.c -o bin/6502.o
+	${CC} ${CFLAGS} -c src/chips/6502.c -o bin/6502.o
 
 nemu:
-	${CC} -c src/bitmath.c -o bin/bitmath.o
+	${CC} ${CFLAGS} -c src/bitmath.c -o bin/bitmath.o
 	${CC} ${CFLAGS} src/nemu.c -c -o bin/nemu.o
 
 link:

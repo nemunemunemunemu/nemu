@@ -76,6 +76,9 @@ void famicom_reset (Famicom* famicom, bool warm)
 	famicom->ppu->scroll_x = 0;
 	famicom->ppu->scroll_y = 0;
 	famicom->ppu->nmi_hit = false;
+	famicom->apu.pulse1_timer = 0;
+	famicom->apu.pulse2_timer = 0;
+	famicom->apu.tri_timer = 0;
 	famicom_reset_controller(famicom);
 	cpu_reset(famicom->cpu, system);
 }
@@ -156,12 +159,10 @@ enum ppu_mmapped_register {
 	PPUDATA,
 };
 
-const word PULSE1_TL = 0x4002;
-const word PULSE1_TH = 0x4003;
-const word OAMDMA = 0x4014;
 void oamdma(Famicom* f, byte value);
 byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 {
+	byte ppustatus = 0;
 	 // zero page
 	if (addr < ppu_addr_start) {
 		if (write) {
@@ -187,7 +188,6 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		case PPUMASK:
 			return 0;
 		case PPUSTATUS:
-			byte ppustatus = 0;
 			ppustatus = set_bit(ppustatus, 7, f->ppu->vblank_flag);
 			f->ppu->vblank_flag = false;
 			f->ppu->write_latch = false;
@@ -249,20 +249,39 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 	// APU & OAMDMA
 	} else if (addr < unmapped_addr_start) {
 		switch (addr) {
-		case OAMDMA:
+		case 0x4014:
 			if (write) {
 				oamdma(f, value);
 			}
 			return 0;
-		case PULSE1_TL:
+		case 0x4002:
 			if (write) {
 				f->apu.pulse1_timer = value;
 			}
 			return 0;
-		case PULSE1_TH:
+		case 0x4003:
 			if (write) {
-				f->apu.pulse1_timer = ((value & f->apu.pulse1_timer) & 0xF8);
-				f->apu.pulse1_freq = value & 0x07;
+				f->apu.pulse1_timer = ((f->apu.pulse1_timer << 3) | value);
+			}
+			return 0;
+		case 0x4006:
+			if (write) {
+				f->apu.pulse2_timer = value;
+			}
+			return 0;
+		case 0x4007:
+			if (write) {
+				f->apu.pulse2_timer = ((f->apu.pulse2_timer << 3) | value);
+			}
+			return 0;
+		case 0x4008:
+			if (write) {
+				f->apu.tri_timer = value;
+			}
+			return 0;
+		case 0x400B:
+			if (write) {
+				f->apu.tri_timer = ((f->apu.tri_timer << 3) | value);
 			}
 			return 0;
 		case 0x4016:
@@ -334,9 +353,8 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 				return f->prg[(addr - offset) % f->prg_size];
 			}
 		}
-	} else {
-		return 0;
 	}
+	return 0;
 }
 
 void oamdma(Famicom* f, byte value)
@@ -396,6 +414,5 @@ void famicom_step(Famicom* famicom)
 		famicom->ppu->vblank_flag = false;
 		famicom->ppu->nmi_hit = true;
 		famicom->debug.nmi = true;
-		printf("NMI\n");
 	}
 }

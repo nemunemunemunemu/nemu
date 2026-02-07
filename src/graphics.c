@@ -12,7 +12,7 @@
 #include "audio.h"
 
 const int window_width = 256;
-const int window_height = 256;
+const int window_height = 240;
 
 const int window_scale = 2;
 
@@ -39,7 +39,7 @@ SDL_Instance* init_graphics()
 		SDL_Quit();
 		return NULL;
 	}
-	SDL_Texture* ppu_texture = SDL_CreateTexture(instance->renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, 256, 256);
+	SDL_Texture* ppu_texture = SDL_CreateTexture(instance->renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, window_width, window_height);
 	instance->ppu_texture = ppu_texture;
 	if (window_scale != 1) {
 		SDL_SetWindowSize(instance->window, window_width * window_scale, window_height * window_scale);
@@ -208,22 +208,7 @@ void draw_oam(SDL_Instance* g, Famicom* f)
 	}
 }
 
-Uint32 get_color(SDL_Color palette[4], byte plane1, byte plane2, int x)
-{
-	Uint32 color;
-	byte first_bit = get_bit(plane1, (x%8));
-	byte second_bit = get_bit(plane2, (x%8));
-	if (first_bit == 0 && second_bit == 0) {
-		color = palette[0].r << 16 | palette[0].g << 8 | palette[0].b;
-	} else if (first_bit == 1 && second_bit == 0) {
-		color = palette[1].r << 16 | palette[1].g << 8 | palette[1].b;
-	} else if (first_bit == 0 && second_bit == 1) {
-		color = palette[2].r << 16 | palette[2].g << 8 | palette[2].b;
-	} else if (first_bit == 1 && second_bit == 1) {
-		color = palette[3].r << 16 | palette[3].g << 8 | palette[3].b;
-	}
-	return color;
-}
+Uint32 get_color(SDL_Color palette[4], byte plane1, byte plane2, int x, int y, int spritex, int spritey);
 
 void draw_ppu(SDL_Instance* g, Famicom* f)
 {
@@ -240,42 +225,42 @@ void draw_ppu(SDL_Instance* g, Famicom* f)
 	word sprite_table_start = 0;
 	byte plane1;
 	byte plane2;
+	if (f->ppu->bg_pattern_table) {
+		bg_table_start = 0x1000;
+	} else {
+		bg_table_start = 0;
+	}
+	if (f->ppu->sprite_pattern_table) {
+		sprite_table_start = 0x1000;
+	} else {
+		sprite_table_start = 0;
+	}
+	int sprites_to_draw[128];
+	int sprite_index = 0;
+	for (int i=0; i<64; i++) {
+		byte sprite_y = f->ppu->oam[i][0];
+		if (sprite_y < 240 && 16 < sprite_y) {
+			sprites_to_draw[sprite_index] = i;
+			sprite_index++;
+		}
+	}
 	for (y=0; y<256; y++) {
 		if (240 <= y) {
 			if (!f->ppu->nmi_hit)
 				f->ppu->vblank_flag = true;
 			f->ppu->nmi_hit = true;
-		}
-		//memset(palette, 0, sizeof(byte));
-		bg_table_start = 0;
-		sprite_table_start = 0;
-		//memset(sprites_to_draw, 0, sizeof(byte));
-		int sprites_to_draw[128];
-		int sprite_index = 0;
-		for (int i=0; i<64; i++) {
-			byte sprite_y = f->ppu->oam[i][0];
-			if (y<(sprite_y+8) && !(y<sprite_y)) {
-				sprites_to_draw[sprite_index] = i;
-				sprite_index++;
-			}
+			break;
 		}
 		for (x=0; x<256; x++) {
 			draw_sprite = false;
-			if (f->ppu->bg_pattern_table) {
-				bg_table_start = 0x1000;
-			} else {
-				bg_table_start = 0;
-			}
-			if (f->ppu->sprite_pattern_table) {
-				sprite_table_start = 0x1000;
-			} else {
-				sprite_table_start = 0;
-			}
+			byte sprite_x;
+			byte sprite_y;
 			if (0 < sprite_index) {
 				for (int i=0; i<sprite_index; i++) {
 					int sprite_id = sprites_to_draw[i];
-					byte sprite_x = f->ppu->oam[sprite_id][3];
-					if (x<(sprite_x+8) && !(x<sprite_x-1)) {
+					sprite_x = f->ppu->oam[sprite_id][3];
+					sprite_y = f->ppu->oam[sprite_id][0];
+					if (x<(sprite_x+8) && !(x<sprite_x) && y<(sprite_y+8) && !(y<sprite_y)) {
 						draw_sprite = true;
 						hflip = f->ppu->oam[sprite_id][2]&0x80;
 						vflip = f->ppu->oam[sprite_id][2]&0x40;
@@ -286,18 +271,15 @@ void draw_ppu(SDL_Instance* g, Famicom* f)
 						palette[1] = palette_lookup(f,sprite_palette+1);
 						palette[2] = palette_lookup(f,sprite_palette+2);
 						palette[3] = palette_lookup(f,sprite_palette+3);
+						plane1 = f->chr[sprite_table_start + tile + (y%8)];
+						plane2 = f->chr[sprite_table_start + tile + (y%8) + 8];
+						if (get_bit(plane1, (x%8)) == 0 && get_bit(plane2, (x%8)) == 0) {
+							draw_sprite = false;
+						}
 					}
 				}
 			}
-			if (draw_sprite) {
-				if (vflip) {
-					plane1 = f->chr[sprite_table_start + tile + (y%8)];
-					plane2 = f->chr[sprite_table_start + tile + (y%8) + 8];
-				} else {
-					plane1 = f->chr[sprite_table_start + tile + (y%8)];
-					plane2 = f->chr[sprite_table_start + tile + (y%8) + 8];
-				}
-			} else {
+			if (!draw_sprite) {
 				hflip = false;
 				vflip = false;
 				tile = f->ppu->nametable[0][32 * (y/8) + (x/8)]*16;
@@ -330,25 +312,33 @@ void draw_ppu(SDL_Instance* g, Famicom* f)
 				plane1 = reverse_byte_order(plane1);
 				plane2 = reverse_byte_order(plane2);
 			}
-			Uint32 color = get_color(palette, plane1, plane2, x);
-			if (get_bit(plane1, (x%8)) == 0 && get_bit(plane2, (x%8)) == 0) {
-				if (draw_sprite) {
-					palette[0].r = 0; palette[0].g = 0; palette[0].b = 0;
-					palette[1] = palette_lookup(f,0+1);
-					palette[2] = palette_lookup(f,0+2);
-					palette[3] = palette_lookup(f,0+3);
-					tile = f->ppu->nametable[0][32 * (y/8) + (x/8)]*16;
-					plane1 = f->chr[bg_table_start + tile + (y%8)];
-					plane2 = f->chr[bg_table_start + tile + (y%8) + 8];
-					color = get_color(palette, plane1, plane2, x);
-				} else {
-					color = 0;
-				}
+			Uint32 color;
+			if (draw_sprite) {
+				color = get_color(palette, plane1, plane2, x, y, sprite_x, sprite_y);
+			} else {
+				color = get_color(palette, plane1, plane2, x, y,0,0);
 			}
 			SDL_SetRenderDrawColor(g->renderer, (color & 0xFF0000) >> 16, (color & 0x00FF00) >> 8, color & 0xFF, 0xFF);
 			SDL_RenderPoint(g->renderer, x, y);
 		}
 	}
 	SDL_SetRenderTarget(g->renderer, NULL);
+	//SDL_RenderTextureRotated(g->renderer, g->ppu_texture, NULL, NULL, f->cycles/5000, NULL, 0);
 	SDL_RenderTexture(g->renderer, g->ppu_texture, NULL, NULL);
+}
+Uint32 get_color(SDL_Color palette[4], byte plane1, byte plane2, int x, int y, int spritex, int spritey)
+{
+	Uint32 color;
+	byte first_bit = get_bit(plane1, (x%8));
+	byte second_bit = get_bit(plane2, (x%8));
+	if (first_bit == 0 && second_bit == 0) {
+		color = palette[0].r << 16 | palette[0].g << 8 | palette[0].b;
+	} else if (first_bit == 1 && second_bit == 0) {
+		color = palette[1].r << 16 | palette[1].g << 8 | palette[1].b;
+	} else if (first_bit == 0 && second_bit == 1) {
+		color = palette[2].r << 16 | palette[2].g << 8 | palette[2].b;
+	} else if (first_bit == 1 && second_bit == 1) {
+		color = palette[3].r << 16 | palette[3].g << 8 | palette[3].b;
+	}
+	return color;
 }

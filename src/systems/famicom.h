@@ -6,8 +6,9 @@ typedef struct famicom_debug {
 } Famicom_debug;
 
 typedef struct famicom_apu {
-	byte pulse1_timer;
-	byte pulse1_freq;
+	word pulse1_timer;
+	word pulse2_timer;
+	word tri_timer;
 } Famicom_apu;
 
 enum famicom_joypad_buttons {

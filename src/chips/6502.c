@@ -42,7 +42,7 @@ byte mmap_6502 (System system, word addr, byte value, bool write)
 	}
 }
 
-void mem_write(System system, word addr, byte value )
+void mem_write(System system, word addr, byte value)
 {
 	mmap_6502(system, addr, value, true);
 }
@@ -174,22 +174,6 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 	}
 }
 
-void update_p_nz ( Cpu_6502* cpu, byte value )
-{
-	set_p(cpu, negative, value & 0x80);
-	set_p(cpu, zero, value == 0);
-}
-
-void update_p_c_cmp ( Cpu_6502* cpu, byte value_old, byte value )
-{
-	set_p(cpu, carry, value_old <= value);
-}
-
-void update_p_v ( Cpu_6502* cpu, byte value_old, byte value )
-{
-	set_p(cpu, overflow, get_bit(value, 0) != get_p(cpu, carry));
-}
-
 byte peek(System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 {
 	return address(system, cpu, oper, a, false, 0);
@@ -223,13 +207,13 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 	case increment_mem:
 		value = peek(system, cpu, a, oper);
 		poke(system, cpu, a, oper, value + 1);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 	case decrement_mem:
 		value = peek(system, cpu, a, oper);
 		poke(system, cpu, a, oper, value - 1);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 	case shift_rol:
@@ -238,7 +222,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		value = set_bit(value, 0, get_p(cpu, carry));
 		poke(system, cpu, a, oper, value);
 		set_p(cpu, carry, value_old & 0x80);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 	case shift_ror:
@@ -247,7 +231,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		value = set_bit(value, 7, get_p(cpu, carry));
 		poke(system, cpu, a, oper, value);
 		set_p(cpu, carry, value_old & 0x01);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
                 break;
 
 	case logical_shift_right:
@@ -255,7 +239,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		set_p(cpu, carry, value & 0x01);
 		value >>= 1;
 		poke(system, cpu, a, oper, value);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 	case arithmetic_shift_left:
@@ -263,13 +247,13 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		set_p(cpu, carry, value & 0x80);
 		value <<= 1;
 		poke(system, cpu, a, oper, value);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 	case compare_reg_mem:
 		value = cpu->reg[r] - peek(system, cpu, a, oper);
-		set_p(cpu, carry, cpu->reg[r] > value);
-		update_p_nz(cpu, value);
+		set_p(cpu, carry, cpu->reg[r] >= value);
+		goto check_flag_nz;
 		break;
 
 	case compare_bit:
@@ -283,66 +267,66 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 	case alter_register:
 		value = peek(system, cpu, a, oper);
 		set_reg(cpu, r,  value);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 	case add:
 		value_old = cpu->reg[reg_a];
 		value = peek(system, cpu, a, oper) + cpu->reg[reg_a] + get_p(cpu, carry);
 		set_reg(cpu, reg_a, value);
-		update_p_nz(cpu, value);
 		set_p(cpu, carry, value <= value_old);
 		set_p(cpu, overflow, (value ^ value_old) & (value ^ peek(system, cpu, a, oper)) & 0x80);
+		goto check_flag_nz;
 		break;
 
 	case subtract:
 		value_old = cpu->reg[reg_a];
 		value = cpu->reg[reg_a] + ~peek(system, cpu, a, oper) + get_p(cpu, carry);
 		set_reg(cpu, reg_a, value);
-		update_p_nz(cpu, value);
 		set_p(cpu, carry, (value <= value_old));
 		set_p(cpu, overflow, (value ^ value_old) & (value ^ ~peek(system, cpu, a, oper)) & 0x80);
+		goto check_flag_nz;
 		break;
 
 	case increment_reg:
 		value = cpu->reg[r] + 1;
 		set_reg(cpu, r, value);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 	case decrement_reg:
 		value = cpu->reg[r] - 1;
 		set_reg(cpu, r, value);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 	case and_a:
 		value = peek(system, cpu, a, oper) & cpu->reg[reg_a];
 		set_reg(cpu, reg_a, value);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 	case or_a:
 		value = peek(system, cpu, a, oper) | cpu->reg[reg_a];
 		set_reg(cpu, reg_a, value);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 	case xor_a:
 		value = peek(system, cpu, a, oper) ^ cpu->reg[reg_a];
 		set_reg(cpu, reg_a, value);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 	case transfer_reg_a:
 		value = cpu->reg[r];
 		set_reg(cpu, reg_a, value);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 	case transfer_reg_x:
 		value = cpu->reg[r];
 		set_reg(cpu, reg_x, value);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 	case transfer_reg_sp:
 		value = cpu->reg[r];
@@ -351,7 +335,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 	case transfer_reg_y:
 		value = cpu->reg[r];
 		set_reg(cpu, reg_y, value);
-		update_p_nz(cpu, value);
+		goto check_flag_nz;
 		break;
 
 		//branch
@@ -439,6 +423,11 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		set_p(cpu, interrupt_disable, true);
 		break;
         }
+	return;
+check_flag_nz:
+	set_p(cpu, negative, value & 0x80);
+	set_p(cpu, zero, value == 0);
+	return;
 }
 
 void nmi(System system, Cpu_6502* cpu)
@@ -682,7 +671,7 @@ void cli ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 
 void sei ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
 {
-	instruction(system, cpu, set_flag, 0, a, decimal, oper, "sei");
+	instruction(system, cpu, set_flag, 0, a, interrupt_disable, oper, "sei");
 }
 
 void clv ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
