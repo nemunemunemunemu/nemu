@@ -12,14 +12,22 @@
 #include "../systems/apple1.h"
 #include "../systems/sst.h"
 
+#define SET_BIT(b,i) (b | 1 << i)
+#define CLEAR_BIT(b,i) (b & ~(1 << i))
+#define GET_BIT(b,i) (b>>i) & 1;
+
 void set_p ( Cpu_6502* cpu, enum flag f, bool value )
 {
-	cpu->reg[reg_p] = set_bit(cpu->reg[reg_p], f, value);
+	if (value) {
+		cpu->reg[reg_p] = SET_BIT(cpu->reg[reg_p], f);
+	} else {
+		cpu->reg[reg_p] = CLEAR_BIT(cpu->reg[reg_p], f);
+	}
 }
 
 byte get_p ( Cpu_6502* cpu, enum flag f )
 {
-	return get_bit(cpu->reg[reg_p], f);
+	return GET_BIT(cpu->reg[reg_p], f);
 }
 
 void set_reg (Cpu_6502* cpu, enum register_ r, byte value)

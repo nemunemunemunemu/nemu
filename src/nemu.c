@@ -151,15 +151,23 @@ void draw_graphics ()
 	switch (selected_system.s) {
 	case famicom_system:
 		//famicom->ppu->vblank_flag = true;
-		/*if (famicom->chr_size != 0) {
-			draw_nametable(graphics, famicom, famicom->ppu->scroll_x, famicom->ppu->scroll_y, 0);
+		if (famicom->chr_size != 0) {
+			SDL_SetRenderTarget(graphics->renderer, graphics->ppu_texture);
+			draw_ppu(graphics, famicom);
 			draw_oam(graphics, famicom);
-			}*/
-		draw_ppu(graphics, famicom);
+	                SDL_SetRenderTarget(graphics->renderer, NULL);
+			SDL_FRect size;
+			size.x = 0;
+			size.y = 0;
+			size.w = 256;
+			size.h = 240;
+			SDL_RenderTexture(graphics->renderer, graphics->ppu_texture, NULL, &size);
+			draw_pattern_table(graphics, famicom, 0, 256, 110);
+			draw_pattern_table(graphics, famicom, 1, 385, 110);
+		}
 		/*
 		if (famicom->chr_size != 0) {
 			draw_pattern_table(graphics, famicom, 0, 0, 100);
-			draw_pattern_table(graphics, famicom, 1, 129, 100);
 			}*/
 		break;
 	case apple1_system:
@@ -211,11 +219,8 @@ void apple1_loop()
 	}
 }
 
-const int famicom_cycles = 29780;
-//const int famicom_cycles = 29779;
-
-int FPS = 120;
-int frameDelay = 8;
+const int famicom_cycles = 10000;
+int frameDelay = 10;
 Uint32 frameStart;
 int frameTime;
 

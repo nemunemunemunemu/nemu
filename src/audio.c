@@ -56,9 +56,9 @@ void apu_process(SDL_Instance* g, Famicom* famicom)
 		int i;
 		for (i = 0; i < SDL_arraysize(samples); i++) {
 			int freq1 = format(square(get_freq(famicom->apu.pulse1_timer), i), 0.1);
-			int freq2 = format(square(get_freq(famicom->apu.pulse2_timer), i), 0.1);
+			//int freq2 = format(square(get_freq(famicom->apu.pulse2_timer), i), 0.1);
 			//int freq3 = format(tone(famicom->apu.tri_timer / 5, i), 0.1);
-			samples[i] = freq1 | freq2;// | freq3;
+			samples[i] = freq1;// | freq2;// | freq3;
 		}
 	} else {
 		SDL_ClearAudioStream(g->stream);
