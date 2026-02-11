@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,14 +59,16 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
-
+	char windowname[255];
 	switch (selected_system.s) {
 	case famicom_system:
+		char* filename;
 		if (debug_file) {
-			rom = fopen(argv[2], "rb");
+			filename = argv[2];
 		} else {
-			rom = fopen(argv[1], "rb");
+			filename = argv[1];
 		}
+		rom = fopen(filename, "rb");
 		if (rom == NULL) {
 			printf("couldn't open file\n");
 			return 1;
@@ -78,6 +81,7 @@ int main(int argc, char* argv[])
 			free(famicom);
 			return 1;
 		}
+		snprintf(windowname, sizeof(windowname), "nemu | %s", filename);
 		selected_system.h = famicom;
 		famicom->debug.rom_name = argv[1];
 		famicom_reset(famicom, false);
@@ -94,6 +98,7 @@ int main(int argc, char* argv[])
 		destroy_system();
 		return 1;
 	}
+	SDL_SetWindowTitle(graphics->window, windowname);
 	switch(selected_system.s) {
 	case famicom_system:
 		famicom_loop();
@@ -165,10 +170,6 @@ void draw_graphics ()
 			draw_pattern_table(graphics, famicom, 0, 256, 110);
 			draw_pattern_table(graphics, famicom, 1, 385, 110);
 		}
-		/*
-		if (famicom->chr_size != 0) {
-			draw_pattern_table(graphics, famicom, 0, 0, 100);
-			}*/
 		break;
 	case apple1_system:
 		break;
@@ -219,18 +220,13 @@ void apple1_loop()
 	}
 }
 
-const int famicom_cycles = 10000;
-int frameDelay = 10;
-Uint32 frameStart;
-int frameTime;
-
+const int famicom_cycles = 20000;
+bool pause = false;
+SDL_Event e;
 void famicom_loop()
 {
-	bool pause = false;
-	SDL_Event e;
 	while (famicom->cpu->running) {
-		frameStart = SDL_GetTicks();
-		while( SDL_PollEvent( &e ) != 0 ) {
+		if ( SDL_PollEvent( &e ) != 0 ) {
 			switch(e.type) {
 			case SDL_EVENT_QUIT:
 				famicom->cpu->running = false;
@@ -244,16 +240,16 @@ void famicom_loop()
 					pause = !pause;
 					break;
 				case SDLK_F4:
-					famicom_step(famicom);
+					famicom_step(famicom, 1);
 					draw_graphics();
 					break;
 				case SDLK_F1:
 					famicom_reset(famicom, true);
-					famicom_step(famicom);
+					famicom_step(famicom, 1);
 					draw_graphics();
 				case SDLK_F2:
 					famicom_reset(famicom, false);
-					famicom_step(famicom);
+					famicom_step(famicom, 1);
 					draw_graphics();
 					break;
 				case SDLK_RETURN:
@@ -310,20 +306,9 @@ void famicom_loop()
 			}
 		}
 		if (!pause) {
-			for (int i=0; i<famicom_cycles; i++) {
-				famicom_step(famicom);
-				if (!famicom->cpu->running)
-					break;
-				if (debug_file)
-					write_cpu_state(famicom->cpu, selected_system, dfh);
-			}
+			famicom_step(famicom, famicom_cycles);
 			draw_graphics();
 			apu_process(graphics, famicom);
-			frameTime = SDL_GetTicks() - frameStart;
-			if(frameDelay > frameTime) {
-				SDL_Delay(frameDelay - frameTime);
-			}
 		}
-		//SDL_Delay(1);
 	}
 }

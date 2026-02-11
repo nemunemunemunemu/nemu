@@ -16,6 +16,7 @@
 #define CLEAR_BIT(b,i) (b & ~(1 << i))
 #define GET_BIT(b,i) (b>>i) & 1;
 
+
 void set_p ( Cpu_6502* cpu, enum flag f, bool value )
 {
 	if (value) {
@@ -28,12 +29,6 @@ void set_p ( Cpu_6502* cpu, enum flag f, bool value )
 byte get_p ( Cpu_6502* cpu, enum flag f )
 {
 	return GET_BIT(cpu->reg[reg_p], f);
-}
-
-void set_reg (Cpu_6502* cpu, enum register_ r, byte value)
-{
-	cpu->reg[r] = value;
-	return;
 }
 
 byte mmap_6502 (System system, word addr, byte value, bool write)
@@ -73,12 +68,12 @@ void cpu_reset(Cpu_6502* cpu, System system)
 void push_stack(System system, Cpu_6502* cpu, byte value)
 {
 	mem_write(system, 0x100 + cpu->reg[reg_sp], value);
-	set_reg(cpu, reg_sp, cpu->reg[reg_sp] - 1);
+	cpu->reg[reg_sp] -= 1;
 }
 
 byte pull_stack(System system, Cpu_6502* cpu)
 {
-	set_reg(cpu, reg_sp, cpu->reg[reg_sp] + 1);
+	cpu->reg[reg_sp] += 1;
 	return mem_read(system, 0x100 + cpu->reg[reg_sp]);
 }
 
@@ -94,7 +89,7 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		return oper[0];
 	case accumulator:
 		if (write) {
-			set_reg(cpu, reg_a, value);
+			cpu->reg[reg_a] = value;
 			return 0;
 		} else {
 			return cpu->reg[reg_a];
@@ -274,14 +269,14 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		//register
 	case alter_register:
 		value = peek(system, cpu, a, oper);
-		set_reg(cpu, r,  value);
+		cpu->reg[r] = value;
 		goto check_flag_nz;
 		break;
 
 	case add:
 		value_old = cpu->reg[reg_a];
 		value = peek(system, cpu, a, oper) + cpu->reg[reg_a] + get_p(cpu, carry);
-		set_reg(cpu, reg_a, value);
+		cpu->reg[reg_a] = value;
 		set_p(cpu, carry, value <= value_old);
 		set_p(cpu, overflow, (value ^ value_old) & (value ^ peek(system, cpu, a, oper)) & 0x80);
 		goto check_flag_nz;
@@ -290,7 +285,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 	case subtract:
 		value_old = cpu->reg[reg_a];
 		value = cpu->reg[reg_a] + ~peek(system, cpu, a, oper) + get_p(cpu, carry);
-		set_reg(cpu, reg_a, value);
+		cpu->reg[reg_a] = value;
 		set_p(cpu, carry, (value <= value_old));
 		set_p(cpu, overflow, (value ^ value_old) & (value ^ ~peek(system, cpu, a, oper)) & 0x80);
 		goto check_flag_nz;
@@ -298,51 +293,51 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 	case increment_reg:
 		value = cpu->reg[r] + 1;
-		set_reg(cpu, r, value);
+		cpu->reg[r] = value;
 		goto check_flag_nz;
 		break;
 
 	case decrement_reg:
 		value = cpu->reg[r] - 1;
-		set_reg(cpu, r, value);
+		cpu->reg[r] = value;
 		goto check_flag_nz;
 		break;
 
 	case and_a:
 		value = peek(system, cpu, a, oper) & cpu->reg[reg_a];
-		set_reg(cpu, reg_a, value);
+		cpu->reg[reg_a] = value;
 		goto check_flag_nz;
 		break;
 
 	case or_a:
 		value = peek(system, cpu, a, oper) | cpu->reg[reg_a];
-		set_reg(cpu, reg_a, value);
+		cpu->reg[reg_a] = value;
 		goto check_flag_nz;
 		break;
 
 	case xor_a:
 		value = peek(system, cpu, a, oper) ^ cpu->reg[reg_a];
-		set_reg(cpu, reg_a, value);
+		cpu->reg[reg_a] = value;
 		goto check_flag_nz;
 		break;
 
 	case transfer_reg_a:
 		value = cpu->reg[r];
-		set_reg(cpu, reg_a, value);
+		cpu->reg[reg_a] = value;
 		goto check_flag_nz;
 		break;
 	case transfer_reg_x:
 		value = cpu->reg[r];
-		set_reg(cpu, reg_x, value);
+		cpu->reg[reg_x] = value;
 		goto check_flag_nz;
 		break;
 	case transfer_reg_sp:
 		value = cpu->reg[r];
-		set_reg(cpu, reg_sp, value);
+		cpu->reg[reg_sp] = value;
 		break;
 	case transfer_reg_y:
 		value = cpu->reg[r];
-		set_reg(cpu, reg_y, value);
+		cpu->reg[reg_y] = value;
 		goto check_flag_nz;
 		break;
 
@@ -378,7 +373,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		break;
 
 	case branch_rti:
-		set_reg(cpu, reg_p, pull_stack(system, cpu));
+		cpu->reg[reg_p] = pull_stack(system, cpu);
 		set_p(cpu, unused_flag, true);
 		set_p(cpu, break_, false);
 		low = pull_stack(system, cpu);
@@ -415,7 +410,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 	case pull_reg_stack:
 		value = pull_stack(system, cpu);
-		set_reg(cpu, r, value);
+		cpu->reg[r] = value;
 		break;
 
 	case set_flag:
@@ -447,473 +442,180 @@ void nmi(System system, Cpu_6502* cpu)
 	cpu->pc = bytes_to_word(mem_read(system, 0xFFFB), mem_read(system, 0xFFFA));
 }
 
-void nop ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, no_op, 0, a, 0, oper, "nop");
-}
-
-void brk_ ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_brk, 0, a, 0, oper, "brk");
-}
-
-// store
-
-void lda ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, alter_register, reg_a, a, 0, oper, "lda");
-}
-
-void ldx ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, alter_register, reg_x, a, 0, oper, "ldx");
-}
-
-void ldy ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, alter_register, reg_y, a, 0, oper, "ldy");
-}
-
-void sta ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, write_mem, reg_a, a, 0, oper, "sta");
-}
-
-void stx ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, write_mem, reg_x, a, 0, oper, "stx");
-}
-
-void sty ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, write_mem, reg_y, a, 0, oper, "sty");
-}
-
-// arithmetic
-
-void adc ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, add, reg_a, a, 0, oper, "adc");
-}
-
-void sbc ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, subtract, reg_a, a, 0, oper, "sbc");
-}
-
-// increment / decrement
-
-void inc ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, increment_mem, 0, a, 0, oper, "inc");
-}
-
-void dec ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, decrement_mem, 0, a, 0, oper, "dec");
-}
-
-void inx ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, increment_reg, reg_x, a, 0, oper, "inx");
-}
-
-void dex ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, decrement_reg, reg_x, a, 0, oper, "dex");
-}
-
-void iny ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, increment_reg, reg_y, a, 0, oper, "iny");
-}
-
-void dey ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, decrement_reg, reg_y, a, 0, oper, "dey");
-}
-
-void and ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, and_a, reg_a, a, 0, oper, "and");
-}
-
-void ora ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, or_a, reg_a, a, 0, oper, "ora");
-}
-
-void eor ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, xor_a, reg_a, a, 0, oper, "eor");
-}
-
-void cmp ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, compare_reg_mem, reg_a, a, 0, oper, "cmp");
-}
-
-void cpx ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, compare_reg_mem, reg_x, a, 0, oper, "cpx");
-}
-
-void cpy ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, compare_reg_mem, reg_y, a, 0, oper, "cpy");
-}
-
-void bit ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, compare_bit, reg_a, a, 0, oper, "bit");
-}
-
-void asl ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, arithmetic_shift_left, 0, a, 0, oper, "asl");
-}
-
-void lsr ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, logical_shift_right, 0, a, 0, oper, "lsr");
-}
-
-void rol ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, shift_rol, 0, a, 0, oper, "rol");
-}
-
-void ror ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, shift_ror, 0, a, 0, oper, "ror");
-}
-
-
-//branch
-void jmp ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch, 0, a, 0, oper, "jmp");
-}
-
-void jsr ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_jsr, 0, a, 0, oper, "jsr");
-}
-
-void rts ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_rts, 0, a, 0, oper, "rts");
-}
-
-void rti ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_rti, 0, a, 0, oper, "rti");
-}
-
-void bcc ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_conditional_flag_clear, 0, a, carry, oper, "bcc");
-}
-
-void bcs ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_conditional_flag, 0, a, carry, oper, "bcs");
-}
-
-void bne ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_conditional_flag_clear, 0, a, zero, oper, "bne");
-}
-
-void beq ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_conditional_flag, 0, a, zero, oper, "beq");
-}
-
-void bpl ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_conditional_flag_clear, 0, a, negative, oper, "bpl");
-}
-
-void bmi ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_conditional_flag, 0, a, negative, oper, "bmi");
-}
-
-void bvc ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_conditional_flag_clear, 0, a, overflow, oper, "bvc");
-}
-
-void bvs ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, branch_conditional_flag, 0, a, overflow, oper, "bvs");
-}
-
-// flags
-
-void clc ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, clear_flag, 0, a, carry, oper, "clc");
-}
-
-void sec ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, set_flag, 0, a, carry, oper, "sec");
-}
-
-void cld ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, clear_flag, 0, a, decimal, oper, "cld");
-}
-
-void sed ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, set_flag, 0, a, decimal, oper, "sed");
-}
-
-void cli ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, clear_flag, 0, a, interrupt_disable, oper, "cli");
-}
-
-void sei ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, set_flag, 0, a, interrupt_disable, oper, "sei");
-}
-
-void clv ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, clear_flag, 0, a, overflow, oper, "clv");
-}
-
-// transfer                      dst             src
-void tax ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, transfer_reg_x, reg_a, a, 0, oper, "tax");
-}
-
-void txa ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, transfer_reg_a, reg_x, a, 0, oper, "txa");
-}
-
-void tay ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, transfer_reg_y, reg_a, a, 0, oper, "tay");
-}
-
-void tya ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, transfer_reg_a, reg_y, a, 0, oper, "tya");
-}
-
-void tsx ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, transfer_reg_x, reg_sp, a, 0, oper, "tsx");
-}
-
-void txs ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, transfer_reg_sp, reg_x, a, 0, oper, "txs");
-}
-
-// stack
-
-void pha ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, push_reg_stack, reg_a, a, 0, oper, "pha");
-}
-
-void pla ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, pull_reg_stack, reg_a, a, 0, oper, "pla");
-}
-
-void php ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	set_p(cpu, unused_flag, true);
-	set_p(cpu, break_, true);
-	instruction(system, cpu, push_reg_stack, reg_p, a, 0, oper, "php");
-}
-
-void plp ( System system, Cpu_6502* cpu, enum addressing_mode a, byte oper[2] )
-{
-	instruction(system, cpu, pull_reg_stack, reg_p, a, 0, oper, "plp");
-}
-
 void step(System system, Cpu_6502* cpu, Instruction i, byte oper[2])
 {
 	cpu->branch_taken = false;
 	switch (i.n)
 	{
 	case LDA:
-		lda(system, cpu, i.a, oper);
+		instruction(system, cpu, alter_register, reg_a, i.a, 0, oper, "lda");
 		break;
 	case LDX:
-		ldx(system, cpu, i.a, oper);
+		instruction(system, cpu, alter_register, reg_x, i.a, 0, oper, "ldx");
 		break;
 	case LDY:
-		ldy(system, cpu, i.a, oper);
+		instruction(system, cpu, alter_register, reg_y, i.a, 0, oper, "ldy");
 		break;
 	case STA:
-		sta(system, cpu, i.a, oper);
+		instruction(system, cpu, write_mem, reg_a, i.a, 0, oper, "sta");
 		break;
 	case STX:
-		stx(system, cpu, i.a, oper);
+		instruction(system, cpu, write_mem, reg_x, i.a, 0, oper, "stx");
 		break;
 	case STY:
-		sty(system, cpu, i.a, oper);
+		instruction(system, cpu, write_mem, reg_y, i.a, 0, oper, "sty");
 		break;
 	case ADC:
-		adc(system, cpu, i.a, oper);
+		instruction(system, cpu, add, reg_a, i.a, 0, oper, "adc");
 		break;
 	case SBC:
-		sbc(system, cpu, i.a, oper);
+		instruction(system, cpu, subtract, reg_a, i.a, 0, oper, "sbc");
 		break;
 	case INC:
-		inc(system, cpu, i.a, oper);
+		instruction(system, cpu, increment_mem, 0, i.a, 0, oper, "inc");
 		break;
 	case INX:
-		inx(system, cpu, i.a, oper);
+		instruction(system, cpu, increment_reg, reg_x, i.a, 0, oper, "inx");
 		break;
 	case INY:
-		iny(system, cpu, i.a, oper);
+		instruction(system, cpu, increment_reg, reg_y, i.a, 0, oper, "iny");
 		break;
 	case DEC:
-		dec(system, cpu, i.a, oper);
+		instruction(system, cpu, decrement_mem, 0, i.a, 0, oper, "dec");
 		break;
 	case DEX:
-		dex(system, cpu, i.a, oper);
+		instruction(system, cpu, decrement_reg, reg_x, i.a, 0, oper, "dex");
 		break;
 	case DEY:
-		dey(system, cpu, i.a, oper);
+		instruction(system, cpu, decrement_reg, reg_y, i.a, 0, oper, "dey");
 		break;
 	case ASL:
-		asl(system, cpu, i.a, oper);
+		instruction(system, cpu, arithmetic_shift_left, 0, i.a, 0, oper, "asl");
 		break;
 	case LSR:
-		lsr(system, cpu, i.a, oper);
+		instruction(system, cpu, logical_shift_right, 0, i.a, 0, oper, "lsr");
 		break;
 	case ROL:
-		rol(system, cpu, i.a, oper);
+		instruction(system, cpu, shift_rol, 0, i.a, 0, oper, "rol");
 		break;
 	case ROR:
-		ror(system, cpu, i.a, oper);
+		instruction(system, cpu, shift_ror, 0, i.a, 0, oper, "ror");
 		break;
 	case AND:
-		and(system, cpu, i.a, oper);
+		instruction(system, cpu, and_a, reg_a, i.a, 0, oper, "and");
 		break;
 	case ORA:
-		ora(system, cpu, i.a, oper);
+		instruction(system, cpu, or_a, reg_a, i.a, 0, oper, "ora");
 		break;
 	case EOR:
-		eor(system, cpu, i.a, oper);
+		instruction(system, cpu, xor_a, reg_a, i.a, 0, oper, "eor");
 		break;
 	case CMP:
-		cmp(system, cpu, i.a, oper);
+		instruction(system, cpu, compare_reg_mem, reg_a, i.a, 0, oper, "cmp");
 		break;
 	case CPX:
-		cpx(system, cpu, i.a, oper);
+		instruction(system, cpu, compare_reg_mem, reg_x, i.a, 0, oper, "cpx");
 		break;
 	case CPY:
-		cpy(system, cpu, i.a, oper);
+		instruction(system, cpu, compare_reg_mem, reg_y, i.a, 0, oper, "cpy");
 		break;
 	case BIT:
-		bit(system, cpu, i.a, oper);
+		instruction(system, cpu, compare_bit, reg_a, i.a, 0, oper, "bit");
 		break;
 	case BCC:
-		bcc(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_conditional_flag_clear, 0, i.a, carry, oper, "bcc");
 		break;
 	case BCS:
-		bcs(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_conditional_flag, 0, i.a, carry, oper, "bcs");
 		break;
 	case BNE:
-		bne(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_conditional_flag_clear, 0, i.a, zero, oper, "bne");
 		break;
 	case BEQ:
-		beq(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_conditional_flag, 0, i.a, zero, oper, "beq");
 		break;
 	case BPL:
-		bpl(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_conditional_flag_clear, 0, i.a, negative, oper, "bpl");
 		break;
 	case BMI:
-		bmi(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_conditional_flag, 0, i.a, negative, oper, "bmi");
 		break;
 	case BVC:
-		bvc(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_conditional_flag_clear, 0, i.a, overflow, oper, "bvc");
 		break;
 	case BVS:
-		bvs(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_conditional_flag, 0, i.a, overflow, oper, "bvs");
 		break;
 	case TAX:
-		tax(system, cpu, i.a, oper);
+		instruction(system, cpu, transfer_reg_x, reg_a, i.a, 0, oper, "tax");
 		break;
 	case TXA:
-		txa(system, cpu, i.a, oper);
+		instruction(system, cpu, transfer_reg_a, reg_x, i.a, 0, oper, "txa");
 		break;
 	case TAY:
-		tay(system, cpu, i.a, oper);
+		instruction(system, cpu, transfer_reg_y, reg_a, i.a, 0, oper, "tay");
 		break;
 	case TYA:
-		tya(system, cpu, i.a, oper);
+		instruction(system, cpu, transfer_reg_a, reg_y, i.a, 0, oper, "tya");
 		break;
 	case TSX:
-		tsx(system, cpu, i.a, oper);
+		instruction(system, cpu, transfer_reg_x, reg_sp, i.a, 0, oper, "tsx");
 		break;
 	case TXS:
-		txs(system, cpu, i.a, oper);
+		instruction(system, cpu, transfer_reg_sp, reg_x, i.a, 0, oper, "txs");
 		break;
 	case PHA:
-		pha(system, cpu, i.a, oper);
+		instruction(system, cpu, push_reg_stack, reg_a, i.a, 0, oper, "pha");
 		break;
 	case PLA:
-		pla(system, cpu, i.a, oper);
+		instruction(system, cpu, pull_reg_stack, reg_a, i.a, 0, oper, "pla");
 		break;
 	case PHP:
-		php(system, cpu, i.a, oper);
+		set_p(cpu, unused_flag, true);
+		set_p(cpu, break_, true);
+		instruction(system, cpu, push_reg_stack, reg_p, i.a, 0, oper, "php");
 		break;
 	case PLP:
-		plp(system, cpu, i.a, oper);
+		instruction(system, cpu, pull_reg_stack, reg_p, i.a, 0, oper, "plp");
 		break;
 	case JMP:
-		jmp(system, cpu, i.a, oper);
+		instruction(system, cpu, branch, 0, i.a, 0, oper, "jmp");
 		break;
 	case JSR:
-		jsr(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_jsr, 0, i.a, 0, oper, "jsr");
 		break;
 	case RTS:
-		rts(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_rts, 0, i.a, 0, oper, "rts");
 		break;
 	case RTI:
-		rti(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_rti, 0, i.a, 0, oper, "rti");
 		break;
 	case CLC:
-		clc(system, cpu, i.a, oper);
+		instruction(system, cpu, clear_flag, 0, i.a, carry, oper, "clc");
 		break;
 	case SEC:
-		sec(system, cpu, i.a, oper);
+		instruction(system, cpu, set_flag, 0, i.a, carry, oper, "sec");
 		break;
 	case CLD:
-		cld(system, cpu, i.a, oper);
+		instruction(system, cpu, clear_flag, 0, i.a, decimal, oper, "cld");
 		break;
 	case SED:
-		sed(system, cpu, i.a, oper);
+		instruction(system, cpu, set_flag, 0, i.a, decimal, oper, "sed");
 		break;
 	case CLI:
-		cli(system, cpu, i.a, oper);
+		instruction(system, cpu, clear_flag, 0, i.a, interrupt_disable, oper, "cli");
 		break;
 	case SEI:
-		sei(system, cpu, i.a, oper);
+		instruction(system, cpu, set_flag, 0, i.a, interrupt_disable, oper, "sei");
 		break;
 	case CLV:
-		clv(system, cpu, i.a, oper);
+		instruction(system, cpu, clear_flag, 0, i.a, overflow, oper, "clv");
 		break;
 	case BRK:
-		brk_(system, cpu, i.a, oper);
+		instruction(system, cpu, branch_brk, 0, i.a, 0, oper, "brk");
 		break;
 	case NOP:
-		nop(system, cpu, i.a, oper);
+		instruction(system, cpu, no_op, 0, i.a, 0, oper, "nop");
 		break;
 	default:
 	case unimplemented:

@@ -1,6 +1,9 @@
 include config.mk
 
-all: audio graphics sst famicom apple1 cpu nemu link
+all: mkbin audio graphics sst famicom apple1 cpu nemu link
+
+mkbin:
+	mkdir -p bin
 
 audio:
 	${CC} ${CFLAGS} -c src/audio.c -o bin/audio.o

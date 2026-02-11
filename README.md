@@ -2,7 +2,7 @@
 WIP famicom/NES emulator
 
 ## compiling
-edit `config.mk` to correspond to the paths of your SDL2 and xlib installation (can be found with `pkg-config` or `sdl2-config`) and then run `make`
+edit `config.mk` to correspond to the paths of your SDL3 and xlib installation (can be found with `pkg-config` or `sdl2-config`) and then run `make`
 
 ## credits / libraries
 

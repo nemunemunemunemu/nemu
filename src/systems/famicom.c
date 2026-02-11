@@ -9,6 +9,9 @@
 #include "../chips/2C02.h"
 #include "../chips/6502.h"
 #include "famicom.h"
+#define SET_BIT(b,i) (b | 1 << i)
+#define CLEAR_BIT(b,i) (b & ~(1 << i))
+#define GET_BIT(b,i) (b>>i) & 1;
 
 const int memsize_famicom = 0x0800;
 
@@ -177,9 +180,9 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		switch (ppu_reg) {
 		case PPUCTRL:
 			if (write) {
-				f->ppu->vram_increment = get_bit(value, 2);
-				f->ppu->sprite_pattern_table = get_bit(value, 3);
-				f->ppu->bg_pattern_table = get_bit(value, 4);
+				f->ppu->vram_increment = GET_BIT(value, 2);
+				f->ppu->sprite_pattern_table = GET_BIT(value, 3);
+				f->ppu->bg_pattern_table = GET_BIT(value, 4);
 				f->ppu->nmi_enable = value & 0x80;
 				f->ppu->nametable_base = value & 0x03;
 				return 0;
@@ -359,7 +362,7 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 
 void oamdma(Famicom* f, byte value)
 {
-	int i = bytes_to_word(value, 0x00);
+	int i = (value << 8);
 	for (int oam_i=0; oam_i<64; oam_i++) {
 		for (int ii=0; ii<4; ii++) {
 			f->ppu->oam[oam_i][ii] = mmap_famicom(f, i+ii, 0, false);
@@ -378,41 +381,49 @@ void mmap_famicom_write(Famicom *famicom, word addr, byte value)
 	mmap_famicom(famicom, addr, value, true);
 }
 
-void famicom_step(Famicom* famicom)
+void famicom_step(Famicom* famicom, int cycles)
 {
 	System system; system.s = famicom_system; system.h = famicom;
-	famicom->debug.nmi = false;
-	famicom->cpu->branch_taken = false;
-	Instruction i = parse(mmap_famicom_read(famicom, famicom->cpu->pc));
-	if (i.n == unimplemented) {
-		printf("unimplemented opcode %X!\n", mmap_famicom_read(famicom, famicom->cpu->pc));
-		famicom->cpu->running = false;
-		return;
-	}
-	byte oper1 = mmap_famicom_read(famicom, famicom->cpu->pc + 1);
-	byte oper2 = 0;
-	switch (i.a) {
-	default:
-		break;
-	case absolute:
-	case absolute_indirect:
-	case absolute_x:
-	case absolute_y:
-		oper2 = mmap_famicom_read(famicom, famicom->cpu->pc + 2);
-		break;
-	}
-	byte oper[2] = {oper1, oper2};
-	famicom->cpu->oper[0] = oper1;
-	famicom->cpu->oper[1] = oper2;
-	famicom->cpu->current_instruction = i;
-	step(system, famicom->cpu, i, oper);
-	famicom->cycles++;
-
-	if (famicom->ppu->vblank_flag && famicom->ppu->nmi_enable) {
-		nmi(system, famicom->cpu);
-		famicom->ppu->nmi_enable = false;
-		famicom->ppu->vblank_flag = false;
-		famicom->ppu->nmi_hit = true;
-		famicom->debug.nmi = true;
+	Instruction i;
+	byte oper1;
+	byte oper2;
+	byte oper[2];
+	for (int c=0; c<cycles; c++) {
+		if (c % 10000 == 0)
+		famicom->debug.nmi = false;
+		famicom->cpu->branch_taken = false;
+		i = parse(mmap_famicom(famicom, famicom->cpu->pc, 0, false));
+		if (i.n == unimplemented) {
+			printf("unimplemented opcode %X!\n", mmap_famicom_read(famicom, famicom->cpu->pc));
+			famicom->cpu->running = false;
+			return;
+		}
+		oper1 = mmap_famicom(famicom, famicom->cpu->pc + 1, 0, false);
+		oper2 = 0;
+		switch (i.a) {
+		default:
+			break;
+		case absolute:
+		case absolute_indirect:
+		case absolute_x:
+		case absolute_y:
+			oper2 = mmap_famicom(famicom, famicom->cpu->pc + 2, 0, false);
+			break;
+		}
+		oper[0] = oper1;
+		oper[1] = oper2;
+		/*
+		famicom->cpu->oper[0] = oper1;
+		famicom->cpu->oper[1] = oper2;
+		famicom->cpu->current_instruction = i;*/
+		step(system, famicom->cpu, i, oper);
+		famicom->cycles++;
+		if (famicom->ppu->vblank_flag && famicom->ppu->nmi_enable) {
+			nmi(system, famicom->cpu);
+			famicom->ppu->nmi_enable = false;
+			famicom->ppu->vblank_flag = false;
+			famicom->ppu->nmi_hit = true;
+			famicom->debug.nmi = true;
+		}
 	}
 }

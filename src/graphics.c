@@ -14,7 +14,7 @@
 const int window_width = 512;
 const int window_height = 240;
 
-const int window_scale = 1;
+const int window_scale = 2;
 
 SDL_Instance* init_graphics()
 {

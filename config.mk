@@ -9,5 +9,5 @@ LIBEPOLLINC = /usr/local/include/libepoll-shim
 
 INCS = -I/usr/local/include -I${SDL3INC} -I${X11INC} -I${LIBEPOLLINC}
 LIBS = -L/usr/local/lib -lSDL3 -L${X11LIB} -lm
-CFLAGS = -D_REENTRANT ${INCS} -g -o0
+CFLAGS = -D_REENTRANT ${INCS} -O3
 LDFLAGS = ${LIBS} 
