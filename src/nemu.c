@@ -83,7 +83,7 @@ int main(int argc, char* argv[])
 		}
 		snprintf(windowname, sizeof(windowname), "nemu | %s", filename);
 		selected_system.h = famicom;
-		famicom->debug.rom_name = argv[1];
+		famicom->loaded_rom.name = argv[1];
 		famicom_reset(famicom, false);
 		break;
 	case apple1_system:
@@ -220,9 +220,10 @@ void apple1_loop()
 	}
 }
 
-const int famicom_cycles = 20000;
+const int famicom_cycles = 19000;
 bool pause = false;
 SDL_Event e;
+int loops = 0;
 void famicom_loop()
 {
 	while (famicom->cpu->running) {
@@ -308,7 +309,8 @@ void famicom_loop()
 		if (!pause) {
 			famicom_step(famicom, famicom_cycles);
 			draw_graphics();
-			apu_process(graphics, famicom);
+			//apu_process(graphics, famicom);
 		}
+		loops++;
 	}
 }

@@ -1,9 +1,12 @@
 typedef struct famicom_debug {
-	char* rom_name;
-	int rom_mapper;
 	bool nmi;
 	bool irq;
 } Famicom_debug;
+
+typedef struct famicom_rom {
+	char* name;
+	int mapper;
+} Famicom_rom;
 
 typedef struct famicom_apu {
 	word pulse1_timer;
@@ -38,6 +41,7 @@ typedef struct famicom {
 	Famicom_ppu* ppu;
 	Famicom_apu apu;
 	Famicom_debug debug;
+	Famicom_rom loaded_rom;
 	int cycles;
 	int prg_size;
 	int chr_size;

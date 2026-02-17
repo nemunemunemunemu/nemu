@@ -106,13 +106,14 @@ int famicom_load_rom (Famicom* famicom, FILE* rom)
 		int chr_size = header[5] * 8192;
 		famicom->prg_size = prg_size;
 		famicom->chr_size = chr_size;
-		byte mapper_lo = (header[6] & 0xF0);
-		byte mapper_hi = (header[7] & 0xF0);
-		byte mapper = bytes_to_word(mapper_hi, mapper_lo);
-		famicom->debug.rom_mapper = mapper;
+		byte mapper_lo = (header[6] & 0xF0) >> 4;
+		byte mapper_hi = header[7] & 0xF0;
+		int mapper = (mapper_hi | mapper_lo);
+		famicom->loaded_rom.mapper = mapper;
 		printf("NES rom, mapper: %d, \nprg size: %d, chr size: %d\n", mapper, prg_size, chr_size);
 		switch (mapper) {
 		case 0:
+		case 3:
 			famicom->prg = (byte*)malloc(sizeof(byte) * prg_size);
 			if (!famicom->prg) {
 				printf("error allocating prg\n");
@@ -132,7 +133,6 @@ int famicom_load_rom (Famicom* famicom, FILE* rom)
 			fseek(rom, 16 + prg_size, SEEK_SET);
 			fread(famicom->chr, sizeof(byte), chr_size, rom);
 			break;
-
 		default:
 			printf("unsupported mapper\n");
 			fclose(rom);
@@ -341,20 +341,34 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		return 0;
 	// cartridge
 	} else if (unmapped_addr_start < addr) {
-		int offset;
-		if (f->prg_size == 16384) {
-			offset = 0xC000;
-		} else if (f->prg_size == 32768) {
-			offset = 0x8000;
-		}
-		if (0x7FFF < addr && addr <= 0xFFFF) {
-			if (write)
-				return 0;
+		switch(f->loaded_rom.mapper) {
+		default:
+		case 0:
+			int offset;
 			if (f->prg_size == 16384) {
-				return f->prg[(addr - offset) % f->prg_size];
+				offset = 0xC000;
 			} else if (f->prg_size == 32768) {
-				return f->prg[(addr - offset) % f->prg_size];
+				offset = 0x8000;
 			}
+			if (0x7FFF < addr && addr <= 0xFFFF) {
+				if (write)
+					return 0;
+				if (f->prg_size == 16384) {
+					return f->prg[(addr - offset) % f->prg_size];
+				} else if (f->prg_size == 32768) {
+					return f->prg[(addr - offset) % f->prg_size];
+				}
+			}
+			break;
+		case 3:
+			if (0x8000 <= addr && addr <= 0xFFFF) {
+				if (write)
+					return 0;
+				return f->prg[(addr) - 0x8000];
+			} else {
+				return 0;
+			}
+			break;
 		}
 	}
 	return 0;
