@@ -5,7 +5,7 @@ typedef struct ppu {
 	bool write_latch;
 	byte vram_addr;
 	word address;
-	bool nametable_base;
+	byte nametable_base;
 	bool vram_increment;
 	bool bg_pattern_table;
 	bool sprite_pattern_table;

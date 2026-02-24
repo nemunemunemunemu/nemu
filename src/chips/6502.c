@@ -408,8 +408,7 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		break;
 
 	case instruction_plp:
-		byte old_p = cpu->reg[reg_p] & 0x20;
-		cpu->reg[reg_p] = PULL_STACK() | old_p;
+		cpu->reg[reg_p] = PULL_STACK();
 		break;
 
 	case set_flag:

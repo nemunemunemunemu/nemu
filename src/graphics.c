@@ -163,9 +163,24 @@ void draw_oam(SDL_Instance* g, Famicom* f)
 		byte sprite_y = f->ppu->oam[i][0];
 		byte hflip = (f->ppu->oam[i][2]&0x80);
 		byte vflip = (f->ppu->oam[i][2]&0x40);
-		byte sprite_palette = (f->ppu->oam[i][2]&0x03) + 0x10;
+		byte sprite_palette;
+		switch (f->ppu->oam[i][2]&0x02) {
+			case 0:
+			default:
+				sprite_palette = 0x10;
+				break;
+			case 1:
+				sprite_palette = 0x14;
+				break;
+			case 2:
+				sprite_palette = 0x18;
+				break;
+			case 3:
+				sprite_palette = 0x1C;
+				break;
+		}
 		SDL_Color palette[4];
-		palette[0] = palette_lookup(f,sprite_palette);
+		palette[0] = palette_lookup(f, 0);
 		palette[1] = palette_lookup(f,sprite_palette+1);
 		palette[2] = palette_lookup(f,sprite_palette+2);
 		palette[3] = palette_lookup(f,sprite_palette+3);
@@ -195,13 +210,14 @@ void draw_ppu(SDL_Instance* g, Famicom* f)
 	Uint32 color;
 	for (y=0; y<256; y++) {
 		if (240 <= y) {
-			//if (!f->ppu->nmi_hit)
+			if (!f->ppu->nmi_hit) {
 				f->ppu->vblank_flag = true;
-			f->ppu->nmi_hit = true;
+				f->ppu->nmi_hit = true;
+			}
 			break;
 		}
 		for (x=0; x<256; x++) {
-			tile = f->ppu->nametable[0][32 * (y/8) + ((x+f->ppu->scroll_x)/8)]*16;
+			tile = f->ppu->nametable[0][32 * (y/8) + ((x)/8)]*16;
 			byte attr = f->ppu->attribute_table[0][8 * (y/32) + (x/32)];
 			byte quadrant = 0;
 			byte topleft = (attr & 0x03)*4;
@@ -221,7 +237,7 @@ void draw_ppu(SDL_Instance* g, Famicom* f)
 			} else if (16 <= xx && 16 <= yy) {
 				quadrant = bottomright;
 			}
-			palette[0].r = 0; palette[0].g = 0; palette[0].b = 0; palette[0].a = 0xFF;
+			palette[0] = palette_lookup(f,quadrant);
 			palette[1] = palette_lookup(f,quadrant+1);
 			palette[2] = palette_lookup(f,quadrant+2);
 			palette[3] = palette_lookup(f,quadrant+3);
