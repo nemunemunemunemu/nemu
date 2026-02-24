@@ -6,6 +6,7 @@ typedef struct famicom_debug {
 typedef struct famicom_rom {
 	char* name;
 	int mapper;
+	int mirroring;
 } Famicom_rom;
 
 typedef struct famicom_apu {
@@ -47,7 +48,9 @@ typedef struct famicom {
 	int chr_size;
 	byte* mem;
 	byte* prg;
+	byte* prg_window;
 	byte* chr;
+	byte* chr_window;
 	byte oam[64][4];
 	Famicom_controller controller_p1;
 	Famicom_controller controller_p2;
@@ -59,6 +62,6 @@ typedef struct famicom {
 Famicom* famicom_create ();
 void famicom_reset (Famicom* famicom, bool warm);
 void famicom_destroy (Famicom* famicom);
-void famicom_step(Famicom* famicom, int cycles);
+void famicom_step(Famicom* famicom, int cycles, bool debug, FILE* dfh);
 int  famicom_load_rom (Famicom* famicom, FILE* rom);
 byte mmap_famicom(Famicom* f, word addr, byte value, bool write);

@@ -160,15 +160,13 @@ void draw_graphics ()
 			SDL_SetRenderTarget(graphics->renderer, graphics->ppu_texture);
 			draw_ppu(graphics, famicom);
 			draw_oam(graphics, famicom);
-	                SDL_SetRenderTarget(graphics->renderer, NULL);
+			SDL_SetRenderTarget(graphics->renderer, NULL);
 			SDL_FRect size;
 			size.x = 0;
 			size.y = 0;
 			size.w = 256;
 			size.h = 240;
 			SDL_RenderTexture(graphics->renderer, graphics->ppu_texture, NULL, &size);
-			draw_pattern_table(graphics, famicom, 0, 256, 110);
-			draw_pattern_table(graphics, famicom, 1, 385, 110);
 		}
 		break;
 	case apple1_system:
@@ -220,7 +218,7 @@ void apple1_loop()
 	}
 }
 
-const int famicom_cycles = 19000;
+const int famicom_cycles = 19998;
 bool pause = false;
 SDL_Event e;
 int loops = 0;
@@ -241,16 +239,16 @@ void famicom_loop()
 					pause = !pause;
 					break;
 				case SDLK_F4:
-					famicom_step(famicom, 1);
+					famicom_step(famicom, 1, false, NULL);
 					draw_graphics();
 					break;
 				case SDLK_F1:
 					famicom_reset(famicom, true);
-					famicom_step(famicom, 1);
+					famicom_step(famicom, 1, false, NULL);
 					draw_graphics();
 				case SDLK_F2:
 					famicom_reset(famicom, false);
-					famicom_step(famicom, 1);
+					famicom_step(famicom, 1, false, NULL);
 					draw_graphics();
 					break;
 				case SDLK_RETURN:
@@ -307,7 +305,7 @@ void famicom_loop()
 			}
 		}
 		if (!pause) {
-			famicom_step(famicom, famicom_cycles);
+			famicom_step(famicom, famicom_cycles, debug_file, dfh);
 			draw_graphics();
 			//apu_process(graphics, famicom);
 		}

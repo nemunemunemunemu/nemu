@@ -92,6 +92,7 @@ void famicom_destroy (Famicom* famicom)
 	free(famicom->mem);
 	free(famicom->prg);
 	free(famicom->chr);
+	free(famicom->chr_window);
 	free(famicom->ppu);
 	free(famicom->cpu);
 	free(famicom);
@@ -110,7 +111,9 @@ int famicom_load_rom (Famicom* famicom, FILE* rom)
 		byte mapper_hi = header[7] & 0xF0;
 		int mapper = (mapper_hi | mapper_lo);
 		famicom->loaded_rom.mapper = mapper;
-		printf("NES rom, mapper: %d, \nprg size: %d, chr size: %d\n", mapper, prg_size, chr_size);
+		int mirroring = header[6] & 0x01;
+		famicom->loaded_rom.mirroring = mirroring;
+		printf("NES rom, mapper: %d, \nprg size: %d, chr size: %d, mirroring: %d\n", mapper, prg_size, chr_size, mirroring);
 		switch (mapper) {
 		case 0:
 		case 3:
@@ -122,7 +125,6 @@ int famicom_load_rom (Famicom* famicom, FILE* rom)
 			}
 			fseek(rom, 16, SEEK_SET);
 			fread(famicom->prg, sizeof(byte), prg_size, rom);
-
 			famicom->chr = (byte*)malloc(sizeof(byte) * chr_size);
 			if (famicom->chr == NULL) {
 				free(famicom->prg);
@@ -132,6 +134,8 @@ int famicom_load_rom (Famicom* famicom, FILE* rom)
 			}
 			fseek(rom, 16 + prg_size, SEEK_SET);
 			fread(famicom->chr, sizeof(byte), chr_size, rom);
+			famicom->chr_window = (byte*) malloc(sizeof(byte) * 8192);
+			memcpy(famicom->chr_window, famicom->chr, 8192);
 			break;
 		default:
 			printf("unsupported mapper\n");
@@ -207,11 +211,9 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		case PPUSCROLL:
 			if (write) {
 				if (f->ppu->write_latch) {
-					if (value != 0)
-						f->ppu->scroll_y = (~value) + 0x100;
+					f->ppu->scroll_y = value;
 				} else {
-					if (value != 0)
-						f->ppu->scroll_x = (~value) + 0x100;
+					f->ppu->scroll_x = value;
 				}
 			}
 			f->ppu->write_latch = !f->ppu->write_latch;
@@ -237,6 +239,10 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 					f->ppu->nametable[1][address - 0x2400] = value;
 				} else if (0x27BF < address && address < 0x2800) {
 					f->ppu->attribute_table[1][address - 0x27C0] = value;
+				} else if (0x2800 <= address && address <= 0x2BBF) {
+					f->ppu->nametable[2][address - 0x2800] = value;
+				} else if (0x2BC0 <= address && address <= 0x2BFF) {
+					f->ppu->attribute_table[2][address - 0x2BC0] = value;
 				} else if (0x3F00 < address && address < 0x3F20 ) {
 					f->ppu->palettes[address - 0x3F00] = value;
 				}
@@ -360,10 +366,20 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 				}
 			}
 			break;
-		case 3:
+		case 2:
 			if (0x8000 <= addr && addr <= 0xFFFF) {
 				if (write)
 					return 0;
+				return f->prg[(addr) - 0xC000];
+			} else {
+				return 0;
+			}
+			break;
+		case 3:
+			if (0x8000 <= addr && addr <= 0xFFFF) {
+				if (write) {
+					memcpy(f->chr_window, f->chr + ((value & f->prg[addr - 0x8000]) & 0x03) * 8192, 8192);
+				}
 				return f->prg[(addr) - 0x8000];
 			} else {
 				return 0;
@@ -395,7 +411,7 @@ void mmap_famicom_write(Famicom *famicom, word addr, byte value)
 	mmap_famicom(famicom, addr, value, true);
 }
 
-void famicom_step(Famicom* famicom, int cycles)
+void famicom_step(Famicom* famicom, int cycles, bool debug, FILE* dfh)
 {
 	System system; system.s = famicom_system; system.h = famicom;
 	Instruction i;
@@ -403,7 +419,6 @@ void famicom_step(Famicom* famicom, int cycles)
 	byte oper2;
 	byte oper[2];
 	for (int c=0; c<cycles; c++) {
-		if (c % 10000 == 0)
 		famicom->debug.nmi = false;
 		famicom->cpu->branch_taken = false;
 		i = parse(mmap_famicom(famicom, famicom->cpu->pc, 0, false));
@@ -426,11 +441,11 @@ void famicom_step(Famicom* famicom, int cycles)
 		}
 		oper[0] = oper1;
 		oper[1] = oper2;
-		/*
-		famicom->cpu->oper[0] = oper1;
-		famicom->cpu->oper[1] = oper2;
-		famicom->cpu->current_instruction = i;*/
+		//printf("%s %X %X pc: %X sp: %X\n", i.m, oper1, oper2, famicom->cpu->pc, famicom->cpu->reg[reg_sp]);
 		step(system, famicom->cpu, i, oper);
+
+		if (debug)
+			write_cpu_state(famicom->cpu, system, dfh);
 		famicom->cycles++;
 		if (famicom->ppu->vblank_flag && famicom->ppu->nmi_enable) {
 			nmi(system, famicom->cpu);

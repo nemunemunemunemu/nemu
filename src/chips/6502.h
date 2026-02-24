@@ -38,9 +38,11 @@ enum operation {
 	transfer_reg_y,
 	push_reg_stack,
 	pull_reg_stack,
+	instruction_php,
+	instruction_pla,
+	instruction_plp,
 	set_flag,
 	clear_flag,
-	break_op
 };
 
 enum flag {
