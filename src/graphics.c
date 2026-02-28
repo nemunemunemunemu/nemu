@@ -165,9 +165,8 @@ void draw_oam(SDL_Instance* g, Famicom* f)
 		byte hflip = (f->ppu->oam[i][2]&0x80);
 		byte vflip = (f->ppu->oam[i][2]&0x40);
 		byte sprite_palette;
-		switch (f->ppu->oam[i][2]&0x02) {
+		switch (f->ppu->oam[i][2]&0x03) {
 			case 0:
-			default:
 				sprite_palette = 0x10;
 				break;
 			case 1:
@@ -181,7 +180,7 @@ void draw_oam(SDL_Instance* g, Famicom* f)
 				break;
 		}
 		SDL_Color palette[4];
-		palette[0] = palette_lookup(f, 0);
+		palette[0] = palette_lookup(f, sprite_palette);
 		palette[1] = palette_lookup(f,sprite_palette+1);
 		palette[2] = palette_lookup(f,sprite_palette+2);
 		palette[3] = palette_lookup(f,sprite_palette+3);
