@@ -18,7 +18,7 @@
 #define MEM_WRITE(ad, v) 	mmap_6502(system, ad, v, true)
 #define PUSH_STACK(v) 		MEM_WRITE(0x100 + cpu->reg[reg_sp], v); cpu->reg[reg_sp] -= 1;
 #define PULL_STACK( )			({cpu->reg[reg_sp] += 1; MEM_READ(0x100 + cpu->reg[reg_sp]);})
-#define GET_P(f) ({GET_BIT(cpu->reg[reg_p], f);})
+#define GET_P(f) 						({GET_BIT(cpu->reg[reg_p], f);})
 
 void set_p ( Cpu_6502* cpu, enum flag f, bool value )
 {
@@ -368,10 +368,11 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		addr = bytes_to_word(MEM_READ(0xFFFF), MEM_READ(0xFFFE));
 		PUSH_STACK(((cpu->pc + 2) & 0xFF00) >> 8);
 		PUSH_STACK((cpu->pc + 2) & 0xFF);
+		byte p_old = cpu->reg[reg_p];
 		set_p(cpu, break_, true);
-		PUSH_STACK(cpu->reg[reg_p]);
-		set_p(cpu, break_, false);
 		set_p(cpu, interrupt_disable, true);
+		PUSH_STACK(cpu->reg[reg_p]);
+		cpu->reg[reg_p] = p_old;
 		cpu->pc = addr;
 		cpu->branch_taken = true;
 		break;

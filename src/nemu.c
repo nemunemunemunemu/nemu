@@ -6,6 +6,8 @@
 #include <signal.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include "SDL_keycode.h"
+#include "SDL_oldnames.h"
 #include "types.h"
 #include "systems/system.h"
 
@@ -157,16 +159,10 @@ void draw_graphics ()
 	case famicom_system:
 		//famicom->ppu->vblank_flag = true;
 		if (famicom->chr_size != 0) {
-			SDL_SetRenderTarget(graphics->renderer, graphics->ppu_texture);
-			draw_ppu(graphics, famicom);
+
+
 			draw_oam(graphics, famicom);
-			SDL_SetRenderTarget(graphics->renderer, NULL);
-			SDL_FRect size;
-			size.x = 0;
-			size.y = 0;
-			size.w = 256;
-			size.h = 240;
-			SDL_RenderTexture(graphics->renderer, graphics->ppu_texture, NULL, &size);
+
 		}
 		break;
 	case apple1_system:
@@ -218,7 +214,7 @@ void apple1_loop()
 	}
 }
 
-const int famicom_cycles = 19998;
+const int famicom_cycles = 29780;
 bool pause = false;
 SDL_Event e;
 int loops = 0;
@@ -257,10 +253,10 @@ void famicom_loop()
 				case SDLK_RSHIFT:
 					famicom->controller_p1.select = true;
 					break;
-				case SDLK_LCTRL:
+				case SDLK_Z:
 					famicom->controller_p1.button_b = true;
 					break;
-				case SDLK_LALT:
+				case SDLK_X:
 					famicom->controller_p1.button_a = true;
 					break;
 				case SDLK_UP:
@@ -282,10 +278,10 @@ void famicom_loop()
 				case SDLK_RETURN:
 					famicom->controller_p1.start = false;
 					break;
-				case SDLK_LCTRL:
+				case SDLK_Z:
 					famicom->controller_p1.button_b = false;
 					break;
-				case SDLK_LALT:
+				case SDLK_X:
 					famicom->controller_p1.button_a = false;
 					break;
 				case SDLK_UP:
@@ -305,8 +301,22 @@ void famicom_loop()
 			}
 		}
 		if (!pause) {
-			famicom_step(famicom, famicom_cycles, debug_file, dfh);
-			draw_graphics();
+			SDL_SetRenderTarget(graphics->renderer, graphics->ppu_texture);
+			for (int c=0; c<famicom_cycles; c++) {
+			tick_ppu(graphics, famicom);
+			tick_ppu(graphics, famicom);
+			tick_ppu(graphics, famicom);
+			famicom_step(famicom, 1, debug_file, dfh);
+			}
+			draw_oam(graphics, famicom);
+			SDL_SetRenderTarget(graphics->renderer, NULL);
+			SDL_FRect size;
+			size.x = 0;
+			size.y = 0;
+			size.w = 275;
+			size.h = 240;
+			SDL_RenderTexture(graphics->renderer, graphics->ppu_texture, NULL, &size);
+			SDL_RenderPresent(graphics->renderer);
 			//apu_process(graphics, famicom);
 		}
 		loops++;

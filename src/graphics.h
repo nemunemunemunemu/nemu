@@ -11,4 +11,4 @@ void graphics_destroy(SDL_Instance* graphics);
 void draw_tile(SDL_Renderer* r, Famicom* f, int tile, int x_offset, int y_offset, bool hflip, bool vflip, int table, SDL_Color palette[4]);
 void draw_pattern_table(SDL_Instance* g, Famicom* f, int table, int x, int y);
 void draw_oam(SDL_Instance* g, Famicom* f);
-void draw_ppu(SDL_Instance* g, Famicom* f);
+void tick_ppu(SDL_Instance* g, Famicom* f);

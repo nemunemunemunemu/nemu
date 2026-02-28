@@ -1,6 +1,5 @@
 typedef struct ppu {
 	bool vblank_flag;
-	bool nmi_hit;
 	bool nmi_enable;
 	bool write_latch;
 	byte vram_addr;
@@ -9,11 +8,13 @@ typedef struct ppu {
 	bool vram_increment;
 	bool bg_pattern_table;
 	bool sprite_pattern_table;
-	byte nametable[4][1024];
+	byte nametable[4][960];
 	byte attribute_table[4][64];
 	byte oam[64][4];
 	byte oam_address;
 	byte palettes[0x20];
-	int scroll_x;
-	int scroll_y;
+	byte scroll_x;
+	byte scroll_y;
+	byte x;
+	byte y;
 } Famicom_ppu;

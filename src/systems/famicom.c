@@ -78,7 +78,6 @@ void famicom_reset (Famicom* famicom, bool warm)
 	famicom->ppu->nametable_base = 0;
 	famicom->ppu->scroll_x = 0;
 	famicom->ppu->scroll_y = 0;
-	famicom->ppu->nmi_hit = false;
 	famicom->apu.pulse1_timer = 0;
 	famicom->apu.pulse2_timer = 0;
 	famicom->apu.tri_timer = 0;
@@ -231,11 +230,11 @@ byte mmap_famicom(Famicom* f, word addr, byte value, bool write)
 		case PPUDATA:
 			if (write) {
 				word address = f->ppu->address;
-                                if (0x1FFF < address && address < 0x23C0) {
+				if (0x1FFF < address && address < 0x23C0) {
 					f->ppu->nametable[0][address - 0x2000] = value;
 				} else if (0x23BF < address && address < 0x2400) {
 					f->ppu->attribute_table[0][address - 0x23C0] = value;
-				} else if (0x23FF < address && address < 0x27C0) {
+				} else if (0x2400 <= address && address < 0x27C0) {
 					f->ppu->nametable[1][address - 0x2400] = value;
 				} else if (0x27BF < address && address < 0x2800) {
 					f->ppu->attribute_table[1][address - 0x27C0] = value;
@@ -451,7 +450,6 @@ void famicom_step(Famicom* famicom, int cycles, bool debug, FILE* dfh)
 			nmi(system, famicom->cpu);
 			famicom->ppu->nmi_enable = false;
 			famicom->ppu->vblank_flag = false;
-			famicom->ppu->nmi_hit = true;
 			famicom->debug.nmi = true;
 		}
 	}
