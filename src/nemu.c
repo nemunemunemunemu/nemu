@@ -151,25 +151,7 @@ void handle_signal(int sig)
 	exit(sig);
 }
 
-void draw_graphics ()
-{
-	SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
-	SDL_RenderClear(graphics->renderer);
-	switch (selected_system.s) {
-	case famicom_system:
-		//famicom->ppu->vblank_flag = true;
-		if (famicom->chr_size != 0) {
 
-
-			draw_oam(graphics, famicom);
-
-		}
-		break;
-	case apple1_system:
-		break;
-	}
-	SDL_RenderPresent(graphics->renderer);
-}
 
 void apple1_loop()
 {
@@ -191,11 +173,9 @@ void apple1_loop()
 					break;
 				case SDLK_LCTRL:
 					apple1_step(apple1);
-					draw_graphics();
 					break;
 				case SDLK_F2:
 					apple1_reset(apple1);
-					draw_graphics();
 					break;
 				}
 			}
@@ -208,7 +188,6 @@ void apple1_loop()
 						write_cpu_state(apple1->cpu, selected_system, dfh);
 				}
 			}
-			draw_graphics();
 		}
 		SDL_Delay(1000 / 60);
 	}
@@ -236,16 +215,13 @@ void famicom_loop()
 					break;
 				case SDLK_F4:
 					famicom_step(famicom, 1, false, NULL);
-					draw_graphics();
 					break;
 				case SDLK_F1:
 					famicom_reset(famicom, true);
 					famicom_step(famicom, 1, false, NULL);
-					draw_graphics();
 				case SDLK_F2:
 					famicom_reset(famicom, false);
 					famicom_step(famicom, 1, false, NULL);
-					draw_graphics();
 					break;
 				case SDLK_RETURN:
 					famicom->controller_p1.start = true;
@@ -302,18 +278,19 @@ void famicom_loop()
 		}
 		if (!pause) {
 			SDL_SetRenderTarget(graphics->renderer, graphics->ppu_texture);
+
 			for (int c=0; c<famicom_cycles; c++) {
 			tick_ppu(graphics, famicom);
 			tick_ppu(graphics, famicom);
 			tick_ppu(graphics, famicom);
 			famicom_step(famicom, 1, debug_file, dfh);
 			}
-			draw_oam(graphics, famicom);
+			//draw_oam(graphics, famicom);
 			SDL_SetRenderTarget(graphics->renderer, NULL);
 			SDL_FRect size;
 			size.x = 0;
 			size.y = 0;
-			size.w = 275;
+			size.w = 256;
 			size.h = 240;
 			SDL_RenderTexture(graphics->renderer, graphics->ppu_texture, NULL, &size);
 			SDL_RenderPresent(graphics->renderer);
