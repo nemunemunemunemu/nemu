@@ -1,4 +1,4 @@
-# nemu
+# nemu (DISCLAIMER: SINCE COMMIT ddd04b1 THIS PROJECT IS VIBECODED)
 WIP famicom/NES emulator
 
 ## features
