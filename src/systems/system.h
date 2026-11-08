@@ -1,7 +1,6 @@
 enum systems {
 	famicom_system,
-	apple1_system,
-	sst_system,
+	sst_system, // this is a dummy "system" that I used for checking the 6502 emulator against the single step tests
 };
 
 typedef struct system {

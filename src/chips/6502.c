@@ -14,28 +14,40 @@
 #define SET_BIT(b,i) (b | 1 << i)
 #define CLEAR_BIT(b,i) (b & ~(1 << i))
 #define GET_BIT(b,i) (b>>i) & 1
-#define MEM_READ(ad) 			mmap_6502(system, ad, 0, false)
+#define MEM_READ(ad) 		mmap_6502(system, ad, 0, false)
 #define MEM_WRITE(ad, v) 	mmap_6502(system, ad, v, true)
 #define PUSH_STACK(v) 		MEM_WRITE(0x100 + cpu->reg[reg_sp], v); cpu->reg[reg_sp] -= 1;
-#define PULL_STACK( )			({cpu->reg[reg_sp] += 1; MEM_READ(0x100 + cpu->reg[reg_sp]);})
-#define GET_P(f) 						({GET_BIT(cpu->reg[reg_p], f);})
+#define PULL_STACK( )		({cpu->reg[reg_sp] += 1; MEM_READ(0x100 + cpu->reg[reg_sp]);})
+#define GET_P(f) 		({GET_BIT(cpu->reg[reg_p], f);})
+#define SET_P(f, value)         if (value) { cpu->reg[reg_p] = SET_BIT(cpu->reg[reg_p], f); } else { cpu->reg[reg_p] = CLEAR_BIT(cpu->reg[reg_p], f); }
+#define PEEK(system, cpu, a, oper) address(system, cpu, oper, a, false, 0)
+#define POKE(system, cpu, a, oper, value) address(system, cpu, oper, a, true, value);
 
-void set_p ( Cpu_6502* cpu, enum flag f, bool value )
-{
-	if (value) {
-		cpu->reg[reg_p] = SET_BIT(cpu->reg[reg_p], f);
-	} else {
-		cpu->reg[reg_p] = CLEAR_BIT(cpu->reg[reg_p], f);
-	}
-}
+// base cycle counts, indexed by opcode
+static const byte cycle_table[256] = {
+	7,6,2,8,3,3,5,5,3,2,2,2,4,4,6,6,
+	2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+	6,6,2,8,3,3,5,5,4,2,2,2,4,4,6,6,
+	2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+	6,6,2,8,3,3,5,5,3,2,2,2,3,4,6,6,
+	2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+	6,6,2,8,3,3,5,5,4,2,2,2,5,4,6,6,
+	2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+	2,6,2,6,3,3,3,3,2,2,2,2,4,4,4,4,
+	2,6,2,6,4,4,4,4,2,5,2,5,5,5,5,5,
+	2,6,2,6,3,3,3,3,2,2,2,2,4,4,4,4,
+	2,5,2,5,4,4,4,4,2,4,2,4,4,4,4,4,
+	2,6,2,8,3,3,5,5,2,2,2,2,4,4,6,6,
+	2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+	2,6,2,8,3,3,5,5,2,2,2,2,4,4,6,6,
+	2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+};
 
 byte mmap_6502 (System system, word addr, byte value, bool write)
 {
 	switch (system.s) {
 	case famicom_system:
-		return mmap_famicom(system.h, addr, value, write);
-	case apple1_system:
-		return mmap_apple1(system.h, addr, value, write);
+		return mmap_famicom((Famicom*)system.h, addr, value, write);
 	case sst_system:
 		return mmap_sst(system.h, addr, value, write);
 	default:
@@ -46,18 +58,20 @@ byte mmap_6502 (System system, word addr, byte value, bool write)
 void cpu_reset(Cpu_6502* cpu, System system)
 {
 	memset(cpu->reg, 0, sizeof(cpu->reg));
-	cpu->reg[reg_p] = 0x20; // 00100000 (the unused flag needs to be set)
+	cpu->reg[reg_p] = 0x20;
 	cpu->reg[reg_sp] = 0xFD;
 	cpu->pc = bytes_to_word(MEM_READ(0xFFFD), MEM_READ(0xFFFC));
 	cpu->running = true;
-	cpu->current_instruction_name = NULL;
+	cpu->current_instruction_name = " ";
+	cpu->cycle = 0;
+	cpu->cycles_last = 0;
+	cpu->page_crossed = false;
+	cpu->extra_cycles = 0;
 }
 
 byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a, bool write, byte value)
 {
 	word addr_a = bytes_to_word(oper[1], oper[0]);
-	word addr_x;
-	word addr_y;
 	word addr_f;
 	byte addr_zp;
 	switch (a) {
@@ -107,6 +121,8 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		break;
 	case absolute_x:
 		addr_f = addr_a + cpu->reg[reg_x];
+		if ((addr_f & 0xFF00) != (addr_a & 0xFF00))
+			cpu->page_crossed = true;
 		if (write) {
 			MEM_WRITE(addr_f, value);
 			return 0;
@@ -116,6 +132,8 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		break;
 	case absolute_y:
 		addr_f = addr_a + cpu->reg[reg_y];
+		if ((addr_f & 0xFF00) != (addr_a & 0xFF00))
+			cpu->page_crossed = true;
 		if (write) {
 			MEM_WRITE(addr_f, value);
 			return 0;
@@ -139,10 +157,13 @@ byte address (System system, Cpu_6502* cpu, byte oper[2], enum addressing_mode a
 		break;
 	case zeropage_yi:
 		if (oper[0] != 0xFF) {
-			addr_f = bytes_to_word(MEM_READ((oper[0]+1)), MEM_READ(oper[0])) + cpu->reg[reg_y];
+			addr_a = bytes_to_word(MEM_READ((oper[0]+1)), MEM_READ(oper[0]));
 		} else {
-			addr_f = bytes_to_word(MEM_READ(0), MEM_READ(oper[0])) + cpu->reg[reg_y];
+			addr_a = bytes_to_word(MEM_READ(0), MEM_READ(oper[0]));
 		}
+		addr_f = addr_a + cpu->reg[reg_y];
+		if ((addr_f & 0xFF00) != (addr_a & 0xFF00))
+			cpu->page_crossed = true;
 		if (write) {
 			MEM_WRITE(addr_f, value);
 			return 0;
@@ -170,8 +191,9 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 	cpu->current_instruction_name = name;
 	byte value;
 	byte value_old;
+	byte operand;
 	int bigvalue;
-	word addr;
+	word addr = 0;
 	word opera = bytes_to_word(oper[1], oper[0]);
 	byte low;
 	byte high;
@@ -183,92 +205,94 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 	//memory
 	case write_mem:
 		value = cpu->reg[r];
-		poke(system, cpu, a, oper, value);
+		POKE(system, cpu, a, oper, value);
 		break;
 
 	case increment_mem:
-		value = peek(system, cpu, a, oper) + 1;
-		poke(system, cpu, a, oper, value);
+		value = PEEK(system, cpu, a, oper) + 1;
+		POKE(system, cpu, a, oper, value);
 		goto check_flag_nz;
 		break;
 
 	case decrement_mem:
-		value = peek(system, cpu, a, oper) - 1;
-		poke(system, cpu, a, oper, value);
+		value = PEEK(system, cpu, a, oper) - 1;
+		POKE(system, cpu, a, oper, value);
 		goto check_flag_nz;
 		break;
 
 	case shift_rol:
-		value_old = peek(system, cpu, a, oper);
+		value_old = PEEK(system, cpu, a, oper);
 		value = value_old << 1;
 		value = set_bit(value, 0, GET_P(carry));
-		poke(system, cpu, a, oper, value);
-		set_p(cpu, carry, value_old & 0x80);
+		POKE(system, cpu, a, oper, value);
+		SET_P(carry, value_old & 0x80);
 		goto check_flag_nz;
 		break;
 
 	case shift_ror:
-		value_old = peek(system, cpu, a, oper);
+		value_old = PEEK(system, cpu, a, oper);
 		value = value_old >> 1;
 		value = set_bit(value, 7, GET_P(carry));
-		poke(system, cpu, a, oper, value);
-		set_p(cpu, carry, value_old & 0x01);
+		POKE(system, cpu, a, oper, value);
+		SET_P(carry, value_old & 0x01);
 		goto check_flag_nz;
 		break;
 
 	case logical_shift_right:
-		value = peek(system, cpu, a, oper);
-		set_p(cpu, carry, value & 0x01);
+		value = PEEK(system, cpu, a, oper);
+		SET_P(carry, value & 0x01);
 		value >>= 1;
-		poke(system, cpu, a, oper, value);
+		POKE(system, cpu, a, oper, value);
 		goto check_flag_nz;
 		break;
 
 	case arithmetic_shift_left:
-		value = peek(system, cpu, a, oper);
-		set_p(cpu, carry, value & 0x80);
+		value = PEEK(system, cpu, a, oper);
+		SET_P(carry, value & 0x80);
 		value <<= 1;
-		poke(system, cpu, a, oper, value);
+		POKE(system, cpu, a, oper, value);
 		goto check_flag_nz;
 		break;
 
 	case compare_reg_mem:
-		value = cpu->reg[r] - peek(system, cpu, a, oper);
-		set_p(cpu, carry, cpu->reg[r] >= value);
+		value = cpu->reg[r] - PEEK(system, cpu, a, oper);
+		SET_P(carry, cpu->reg[r] >= value);
 		goto check_flag_nz;
 		break;
 
 	case compare_bit:
-		value = peek(system, cpu, a, oper);
-		set_p(cpu, zero, (value & cpu->reg[reg_a]) == 0);
-		set_p(cpu, negative, value & 0x80);
-		set_p(cpu, overflow, value & 0x40);
+		value = PEEK(system, cpu, a, oper);
+		SET_P(zero, (value & cpu->reg[reg_a]) == 0);
+		SET_P(negative, value & 0x80);
+		SET_P(overflow, value & 0x40);
 		break;
 
 		//register
 	case alter_register:
-		value = peek(system, cpu, a, oper);
+		value = PEEK(system, cpu, a, oper);
 		cpu->reg[r] = value;
 		goto check_flag_nz;
 		break;
 
 	case add:
 		value_old = cpu->reg[reg_a];
-		bigvalue = peek(system, cpu, a, oper) + cpu->reg[reg_a] + GET_P(carry);
+		operand = PEEK(system, cpu, a, oper);
+		bigvalue = operand + cpu->reg[reg_a] + GET_P(carry);
 		value = (byte)bigvalue;
 		cpu->reg[reg_a] = value;
-		set_p(cpu, carry, 0xFF < bigvalue);
-		set_p(cpu, overflow, (value ^ value_old) & (value ^ peek(system, cpu, a, oper)) & 0x80);
+		SET_P(carry, 0xFF < bigvalue);
+		SET_P(overflow, (value ^ value_old) & (value ^ operand) & 0x80);
 		goto check_flag_nz;
 		break;
 
 	case subtract:
 		value_old = cpu->reg[reg_a];
-		value = cpu->reg[reg_a] + ~peek(system, cpu, a, oper) + GET_P(carry);
-		bigvalue = cpu->reg[reg_a] + ~peek(system, cpu, a, oper) + GET_P(carry);
+		operand = PEEK(system, cpu, a, oper);
+		bigvalue = cpu->reg[reg_a] + ~operand + GET_P(carry);
+		value = (byte)bigvalue;
 		cpu->reg[reg_a] = value;
-		set_p(cpu, carry, (0 <= bigvalue));
-		set_p(cpu, overflow, (value ^ value_old) & (value ^ ~peek(system, cpu, a, oper)) & 0x80);
+		SET_P(carry, (0 <= bigvalue));
+		SET_P(overflow, (value ^ value_old) & (value ^ ~operand) & 0x80);
 		goto check_flag_nz;
 		break;
 
@@ -285,19 +309,19 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		break;
 
 	case and_a:
-		value = peek(system, cpu, a, oper) & cpu->reg[reg_a];
+		value = PEEK(system, cpu, a, oper) & cpu->reg[reg_a];
 		cpu->reg[reg_a] = value;
 		goto check_flag_nz;
 		break;
 
 	case or_a:
-		value = peek(system, cpu, a, oper) | cpu->reg[reg_a];
+		value = PEEK(system, cpu, a, oper) | cpu->reg[reg_a];
 		cpu->reg[reg_a] = value;
 		goto check_flag_nz;
 		break;
 
 	case xor_a:
-		value = peek(system, cpu, a, oper) ^ cpu->reg[reg_a];
+		value = PEEK(system, cpu, a, oper) ^ cpu->reg[reg_a];
 		cpu->reg[reg_a] = value;
 		goto check_flag_nz;
 		break;
@@ -355,8 +379,8 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 	case branch_rti:
 		cpu->reg[reg_p] = PULL_STACK();
-		set_p(cpu, unused_flag, true);
-		set_p(cpu, break_, false);
+		SET_P(unused_flag, true);
+		SET_P(break_, false);
 		low = PULL_STACK();
 		high = PULL_STACK();
 		addr = bytes_to_word(high, low);
@@ -369,8 +393,8 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		PUSH_STACK(((cpu->pc + 2) & 0xFF00) >> 8);
 		PUSH_STACK((cpu->pc + 2) & 0xFF);
 		byte p_old = cpu->reg[reg_p];
-		set_p(cpu, break_, true);
-		set_p(cpu, interrupt_disable, true);
+		SET_P(break_, true);
+		SET_P(interrupt_disable, true);
 		PUSH_STACK(cpu->reg[reg_p]);
 		cpu->reg[reg_p] = p_old;
 		cpu->pc = addr;
@@ -379,14 +403,18 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 
 	case branch_conditional_flag:
 		addr = (int8_t)oper[0] + cpu->pc;
-		if (GET_P(f) == 1)
+		if (GET_P(f) == 1) {
+			cpu->extra_cycles = (((cpu->pc + 2) & 0xFF00) != ((addr + 2) & 0xFF00)) ? 2 : 1;
 			cpu->pc = addr;
+		}
 		break;
 
 	case branch_conditional_flag_clear:
 		addr = (int8_t)oper[0] + cpu->pc;
-		if (GET_P(f) == 0)
+		if (GET_P(f) == 0) {
+			cpu->extra_cycles = (((cpu->pc + 2) & 0xFF00) != ((addr + 2) & 0xFF00)) ? 2 : 1;
 			cpu->pc = addr;
+		}
 		break;
 
 	case push_reg_stack:
@@ -413,17 +441,17 @@ void instruction (System system, Cpu_6502* cpu, enum operation o, enum register_
 		break;
 
 	case set_flag:
-		set_p(cpu, f, true);
+		SET_P(f, true);
 		break;
 
 	case clear_flag:
-		set_p(cpu, f, false);
+		SET_P(f, false);
 		break;
         }
 	return;
 check_flag_nz:
-	set_p(cpu, negative, value & 0x80);
-	set_p(cpu, zero, value == 0);
+	SET_P(negative, value & 0x80);
+	SET_P(zero, value == 0);
 	return;
 }
 
@@ -431,14 +459,29 @@ void nmi(System system, Cpu_6502* cpu)
 {
 	PUSH_STACK(get_higher_byte(cpu->pc));
 	PUSH_STACK(get_lower_byte(cpu->pc));
-	set_p(cpu, break_, false);
+	SET_P(break_, false);
+	SET_P(unused_flag, true);
 	PUSH_STACK(cpu->reg[reg_p]);
+	SET_P(interrupt_disable, true);
 	cpu->pc = bytes_to_word(MEM_READ(0xFFFB), MEM_READ(0xFFFA));
+}
+
+void irq(System system, Cpu_6502* cpu)
+{
+	PUSH_STACK(get_higher_byte(cpu->pc));
+	PUSH_STACK(get_lower_byte(cpu->pc));
+	SET_P(break_, false);
+	SET_P(unused_flag, true);
+	PUSH_STACK(cpu->reg[reg_p]);
+	SET_P(interrupt_disable, true);
+	cpu->pc = bytes_to_word(MEM_READ(0xFFFF), MEM_READ(0xFFFE));
 }
 
 void step(System system, Cpu_6502* cpu, Instruction i, byte oper[2])
 {
 	cpu->branch_taken = false;
+	cpu->page_crossed = false;
+	cpu->extra_cycles = 0;
 	switch (i.n)
 	{
 	case LDA:
@@ -637,6 +680,19 @@ void step(System system, Cpu_6502* cpu, Instruction i, byte oper[2])
 			break;
 		}
 	}
+	cpu->cycles_last = cycle_table[i.o] + cpu->extra_cycles;
+	// reads that cross a page boundary take an extra cycle, stores and rmw don't
+	if (cpu->page_crossed) {
+		switch (i.n) {
+		case LDA: case LDX: case LDY: case ADC: case SBC:
+		case AND: case ORA: case EOR: case CMP:
+			cpu->cycles_last++;
+			break;
+		default:
+			break;
+		}
+	}
+	cpu->cycle++;
 }
 
 Instruction parse(byte opcode)
@@ -1050,7 +1106,6 @@ void write_cpu_state (Cpu_6502* cpu, System system, FILE* f)
 		snprintf(addr_mode, sizeof(addr_mode), "0x%X", opera);
 		break;
 	}
-	byte oper[] = {oper1, oper2};
 	fprintf(f, "%X %s %s %s  -  ", i.o, addr_mode_n, i.m, addr_mode);
 
 	char* reg_names[] = {

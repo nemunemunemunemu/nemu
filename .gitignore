@@ -13,3 +13,16 @@ roms
 *.log
 logs
 tests
+builddir/
+build/
+*.sav
+*.zip
+*.nsf
+*.nsfe
+*.fds
+*.pal
+*.exe
+*.dll
+nemu.cfg
+favorites.txt
+exports/

@@ -1,5 +1,5 @@
 typedef struct apple1 {
-	Cpu_6502* cpu;
+	Cpu_6502 cpu;
 	byte* mem;
 	byte rom[0x100];
 } Apple1;

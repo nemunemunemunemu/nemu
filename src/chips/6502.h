@@ -100,6 +100,10 @@ typedef struct cpu_6502 {
 	bool branch_taken;
 	char* current_instruction_name;
 	Instruction current_instruction;
+	long cycle;
+	int cycles_last; // cpu cycles taken by the last step
+	bool page_crossed;
+	int extra_cycles;
 	byte oper[2];
 } Cpu_6502;
 
@@ -109,3 +113,4 @@ Instruction parse(byte opcode);
 void cpu_reset(Cpu_6502* cpu, System system);
 void step(System system, Cpu_6502* cpu, struct parsed_instruction i, byte oper[2]);
 void nmi(System system, Cpu_6502* cpu);
+void irq(System system, Cpu_6502* cpu);

@@ -12,5 +12,6 @@ byte mmap_sst(Sst* s, word addr, byte value, bool write)
 		return 0;
 	} else {
 		return s->ram[addr];
+
 	}
 }

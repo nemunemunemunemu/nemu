@@ -1,0 +1,10 @@
+int mapper_init(Famicom* f);
+byte mapper_cpu_read(Famicom* f, word addr);
+void mapper_cpu_write(Famicom* f, word addr, byte value);
+byte mapper_chr_read(Famicom* f, word addr);
+byte mapper_chr_peek(Famicom* f, word addr);
+void mapper_chr_write(Famicom* f, word addr, byte value);
+void mapper_scanline(Famicom* f);
+bool mapper_nametable(Famicom* f, word addr, byte* value, bool write);
+void mapper_cpu_clock(Famicom* f);
+bool mapper_irq(Famicom* f);

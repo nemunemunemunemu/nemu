@@ -1,55 +1,55 @@
-
+#include <raylib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include <signal.h>
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
-#include "SDL_keycode.h"
-#include "SDL_oldnames.h"
+
 #include "types.h"
 #include "systems/system.h"
 
 #include "chips/2C02.h"
 #include "chips/6502.h"
 #include "systems/famicom.h"
-#include "systems/apple1.h"
-
 #include "graphics.h"
-#include "audio.h"
 
 #define VERSION "0.0.0"
 
-System selected_system;
-Famicom* famicom; // todo: shove these pointers inside selected_system
-Apple1* apple1;
+#ifdef _WIN32
+// windows.h clashes with raylib's names, so just the one function we need
+__declspec(dllimport) int __stdcall SetConsoleOutputCP(unsigned int code_page);
+#endif
 
-SDL_Instance* graphics;
-SDL_Color palette[4];
-bool debug_file;
-FILE* rom;
+System selected_system;
+Famicom famicom;
+
+bool debug_file = false;
 FILE* dfh;
 
 void usage(char* name);
 void destroy_system();
 void handle_signal(int sig);
 void nemu_exit();
-void draw_graphics();
 void famicom_loop();
-void apple1_loop();
+
+int window_scale;
 
 int main(int argc, char* argv[])
 {
 	selected_system.s = famicom_system;
 
+#ifdef _WIN32
+	// paths are utf-8 thanks to the manifest, let the console print them too
+	SetConsoleOutputCP(65001);
+#endif
 	signal(SIGINT, handle_signal);
 
-	if (selected_system.s == famicom_system && argc == 1) {
+	if (1 < argc && (strcmp("-h", argv[1]) == 0 || strcmp("--help", argv[1]) == 0)) {
 		usage(argv[0]);
 		return 0;
 	}
 
+	/*
 	if (2 < argc) {
 		if (strcmp("-debug", argv[1]) == 0) {
 			printf("logging to file\n");
@@ -60,59 +60,32 @@ int main(int argc, char* argv[])
 				return 1;
 			}
 		}
-	}
-	char windowname[255];
+		}*/
+
 	switch (selected_system.s) {
 	case famicom_system:
-		char* filename;
+		char* filename = NULL;
 		if (debug_file) {
-			filename = argv[2];
-		} else {
+			if (2 < argc)
+				filename = argv[2];
+		} else if (1 < argc) {
 			filename = argv[1];
 		}
-		rom = fopen(filename, "rb");
-		if (rom == NULL) {
-			printf("couldn't open file\n");
+		if (famicom_create(&famicom) == -1)
 			return 1;
-		}
-		famicom = famicom_create();
-		if (famicom == NULL) {
-			return 1;
-		}
-		if (famicom_load_rom(famicom, rom) == 1) {
-			free(famicom);
-			return 1;
-		}
-		snprintf(windowname, sizeof(windowname), "nemu | %s", filename);
-		selected_system.h = famicom;
-		famicom->loaded_rom.name = argv[1];
-		famicom_reset(famicom, false);
-		break;
-	case apple1_system:
-		apple1 = apple1_create();
-		selected_system.h = apple1;
-		apple1_reset(apple1);
+		selected_system.h = &famicom;
+		// without a rom the cartridge slot starts empty, one can be picked from the ui
+		if (filename != NULL && famicom_insert_cartridge(&famicom, filename) == -1)
+			printf("error loading rom\n");
 		break;
 	}
-
-	graphics = init_graphics();
-	if (graphics == NULL) {
-		destroy_system();
-		return 1;
-	}
-	SDL_SetWindowTitle(graphics->window, windowname);
+	graphics_init();
 	switch(selected_system.s) {
+	default:
 	case famicom_system:
 		famicom_loop();
 		break;
-	case apple1_system:
-		apple1_loop();
-		break;
 	}
-	SDL_SetRenderDrawColor(graphics->renderer, 0,0,0,0xFF);
-	SDL_RenderClear(graphics->renderer);
-	SDL_RenderPresent(graphics->renderer);
-	printf("stopping\n");
 	nemu_exit();
 	return 0;
 }
@@ -121,6 +94,7 @@ void usage (char* name)
 {
 	printf("%s %s\n", name, VERSION);
 	printf("usage: %s [-debug] [file]\n", name);
+	printf("without a file the cartridge slot starts empty, load one from the Famicom window\n");
 	return;
 }
 
@@ -128,20 +102,19 @@ void destroy_system()
 {
 	switch(selected_system.s) {
 	case famicom_system:
-		famicom_destroy(famicom);
-		break;
-	case apple1_system:
-		apple1_destroy(apple1);
+		famicom_destroy(&famicom);
 		break;
 	}
 }
 
 void nemu_exit()
 {
-	graphics_destroy(graphics);
+	graphics_destroy();
 	destroy_system();
-	if (debug_file)
+	if (debug_file && dfh != NULL) {
 		fclose(dfh);
+		dfh = NULL;
+	}
 }
 
 void handle_signal(int sig)
@@ -151,151 +124,9 @@ void handle_signal(int sig)
 	exit(sig);
 }
 
-
-
-void apple1_loop()
-{
-	bool pause = false;
-	SDL_Event e;
-	while (apple1->cpu->running) {
-		while (SDL_PollEvent(&e) != 0 ) {
-			switch (e.type) {
-			case SDL_EVENT_QUIT:
-				apple1->cpu->running = false;
-				break;
-			case SDL_EVENT_KEY_DOWN:
-				switch (e.key.key) {
-				case SDLK_ESCAPE:
-					apple1->cpu->running = false;
-					break;
-				case SDLK_SPACE:
-					pause = !pause;
-					break;
-				case SDLK_LCTRL:
-					apple1_step(apple1);
-					break;
-				case SDLK_F2:
-					apple1_reset(apple1);
-					break;
-				}
-			}
-		}
-		if (!pause) {
-			for (int i=0; i<1; i++) {
-				if (apple1->cpu->running) {
-					apple1_step(apple1);
-					if (debug_file)
-						write_cpu_state(apple1->cpu, selected_system, dfh);
-				}
-			}
-		}
-		SDL_Delay(1000 / 60);
-	}
-}
-
-const int famicom_cycles = 29780;
-bool pause = false;
-SDL_Event e;
-int loops = 0;
 void famicom_loop()
 {
-	while (famicom->cpu->running) {
-		if ( SDL_PollEvent( &e ) != 0 ) {
-			switch(e.type) {
-			case SDL_EVENT_QUIT:
-				famicom->cpu->running = false;
-				break;
-			case SDL_EVENT_KEY_DOWN:
-				switch (e.key.key) {
-				case SDLK_ESCAPE:
-					famicom->cpu->running = false;
-					break;
-				case SDLK_F3:
-					pause = !pause;
-					break;
-				case SDLK_F4:
-					famicom_step(famicom, 1, false, NULL);
-					break;
-				case SDLK_F1:
-					famicom_reset(famicom, true);
-					famicom_step(famicom, 1, false, NULL);
-				case SDLK_F2:
-					famicom_reset(famicom, false);
-					famicom_step(famicom, 1, false, NULL);
-					break;
-				case SDLK_RETURN:
-					famicom->controller_p1.start = true;
-					break;
-				case SDLK_RSHIFT:
-					famicom->controller_p1.select = true;
-					break;
-				case SDLK_Z:
-					famicom->controller_p1.button_b = true;
-					break;
-				case SDLK_X:
-					famicom->controller_p1.button_a = true;
-					break;
-				case SDLK_UP:
-					famicom->controller_p1.up = true;
-					break;
-				case SDLK_DOWN:
-					famicom->controller_p1.down = true;
-					break;
-				case SDLK_LEFT:
-					famicom->controller_p1.left = true;
-					break;
-				case SDLK_RIGHT:
-					famicom->controller_p1.right = true;
-					break;
-				}
-				break;
-			case SDL_EVENT_KEY_UP:
-				switch (e.key.key) {
-				case SDLK_RETURN:
-					famicom->controller_p1.start = false;
-					break;
-				case SDLK_Z:
-					famicom->controller_p1.button_b = false;
-					break;
-				case SDLK_X:
-					famicom->controller_p1.button_a = false;
-					break;
-				case SDLK_UP:
-					famicom->controller_p1.up = false;
-					break;
-				case SDLK_DOWN:
-					famicom->controller_p1.down = false;
-					break;
-				case SDLK_LEFT:
-					famicom->controller_p1.left = false;
-					break;
-				case SDLK_RIGHT:
-					famicom->controller_p1.right = false;
-					break;
-				}
-				break;
-			}
-		}
-		if (!pause) {
-			SDL_SetRenderTarget(graphics->renderer, graphics->ppu_texture);
-
-			for (int c=0; c<famicom_cycles; c++) {
-			tick_ppu(graphics, famicom);
-			tick_ppu(graphics, famicom);
-			tick_ppu(graphics, famicom);
-			famicom_step(famicom, 1, debug_file, dfh);
-			}
-			//draw_oam(graphics, famicom);
-			SDL_SetRenderTarget(graphics->renderer, NULL);
-			SDL_FRect size;
-			size.x = 0;
-			size.y = 0;
-			size.w = 256;
-			size.h = 240;
-			SDL_RenderTexture(graphics->renderer, graphics->ppu_texture, NULL, &size);
-			SDL_RenderPresent(graphics->renderer);
-			//apu_process(graphics, famicom);
-		}
-		loops++;
+	while (!WindowShouldClose()) {
+		graphics_draw(&famicom);
 	}
 }

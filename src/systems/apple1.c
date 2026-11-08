@@ -50,26 +50,18 @@ Apple1* apple1_create ()
 {
 	Apple1* apple1 = malloc(sizeof(Apple1));
 	apple1->mem = malloc( sizeof(byte) * memsize_apple1 );
-	apple1->cpu = (Cpu_6502*) malloc(sizeof(Cpu_6502));
 	memcpy(apple1->rom, wozmon, 255);
 	if (apple1->mem == NULL) {
 		free(apple1);
 		printf("couldn't allocate memory\n");
 		return NULL;
 	}
-	if (apple1->cpu == NULL) {
-		free(apple1->mem);
-		free(apple1);
-		printf("couldn't allocate memory\n");
-		return NULL;
-	}
-	apple1->cpu->running = false;
+	apple1->cpu.running = false;
 	return apple1;
 }
 
 void apple1_destroy(Apple1* apple1)
 {
-	free(apple1->cpu);
 	free(apple1->mem);
 	free(apple1);
 }
@@ -80,7 +72,7 @@ void apple1_reset(Apple1* apple1)
 	system.s = apple1_system;
 	system.h = apple1;
 	memset( apple1->mem, 0, sizeof(byte) * memsize_apple1 );
-	cpu_reset(apple1->cpu, system);
+	cpu_reset(&apple1->cpu, system);
 }
 
 byte mmap_apple1(Apple1* apple1, word addr, byte value, bool write)
@@ -115,14 +107,14 @@ byte mmap_apple1(Apple1* apple1, word addr, byte value, bool write)
 void apple1_step(Apple1* apple1)
 {
 	System system; system.s = apple1_system; system.h = apple1;
-	apple1->cpu->branch_taken = false;
-	Instruction i = parse(mmap_apple1(apple1, apple1->cpu->pc, 0, false));
+	apple1->cpu.branch_taken = false;
+	Instruction i = parse(mmap_apple1(apple1, apple1->cpu.pc, 0, false));
 	if (i.n == unimplemented) {
-		printf("unimplemented opcode %X!\n", mmap_apple1(apple1, apple1->cpu->pc, 0, false));
-		apple1->cpu->running = false;
+		printf("unimplemented opcode %X!\n", mmap_apple1(apple1, apple1->cpu.pc, 0, false));
+		apple1->cpu.running = false;
 		return;
 	}
-	byte oper1 = mmap_apple1(apple1, apple1->cpu->pc + 1, 0, false);
+	byte oper1 = mmap_apple1(apple1, apple1->cpu.pc + 1, 0, false);
 	byte oper2 = 0;
 	word opera = 0;
 	switch (i.a) {
@@ -132,13 +124,13 @@ void apple1_step(Apple1* apple1)
 	case absolute_indirect:
 	case absolute_x:
 	case absolute_y:
-		oper2 = mmap_apple1(apple1, apple1->cpu->pc + 2, 0, false);
+		oper2 = mmap_apple1(apple1, apple1->cpu.pc + 2, 0, false);
 		opera = bytes_to_word(oper2, oper1);
 		break;
 	}
 	byte oper[2] = {oper1, oper2};
-	apple1->cpu->oper[0] = oper1;
-	apple1->cpu->oper[1] = oper2;
-	apple1->cpu->current_instruction = i;
-	step(system, apple1->cpu, i, oper);
+	apple1->cpu.oper[0] = oper1;
+	apple1->cpu.oper[1] = oper2;
+	apple1->cpu.current_instruction = i;
+	step(system, &apple1->cpu, i, oper);
 }
